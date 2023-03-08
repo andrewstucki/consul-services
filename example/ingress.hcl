@@ -1,8 +1,8 @@
 Kind = "ingress-gateway"
-Name = "{{ .Name }}"
+Name = "ingress"
 Listeners = [
   {
-    Port = {{ .Port1 }}
+    Port = {{ .GetPort }}
     Protocol = "http"
     Services = [{
       Name = "http-1"

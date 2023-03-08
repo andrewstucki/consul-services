@@ -1,15 +1,15 @@
 Kind = "api-gateway"
-Name = "{{ .Name }}"
+Name = "api"
 Listeners = [
   {
     Name     = "listener-one"
-    Port     = {{ .Port1 }}
+    Port     = {{ .GetPort }}
     Protocol = "http"
     Hostname = "*.consul.local"
   },
   {
     Name     = "listener-two"
-    Port     = {{ .Port2 }}
+    Port     = {{ .GetPort }}
     Protocol = "http"
     Hostname = "*.consul.local"
     TLS = {

@@ -3,30 +3,23 @@ package pkg
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 
-	"github.com/hashicorp/go-hclog"
 	"golang.org/x/sync/errgroup"
 )
 
 // ConsulMeshService is a service run on the Consul service mesh using the `consul connect envoy` command.
 type ConsulMeshService struct {
-	// ConsulBinary is the path on the system to the Consul binary used to invoke registration and connect commands.
-	ConsulBinary string
+	*ConsulCommand
+
 	// ID is the id of the service to run
 	ID string
 	// Name is the name of the service to run
 	Name string
 	// Protocol is the protocol of the service
 	Protocol string
-	// Folder is the temporary folder to use in rendering out HCL files
-	Folder string
-	// Logger is the logger used for logging messages
-	Logger hclog.Logger
 	// OnRegister is a channel to write back to when we've registered our services
 	OnRegister chan struct{}
 
@@ -131,26 +124,6 @@ func (c *ConsulMeshService) runEnvoy(ctx context.Context) error {
 	c.Logger.Info("running sidecar")
 
 	return c.runConsulBinary(ctx, c.sidecarArgs())
-}
-
-func (c *ConsulMeshService) runConsulBinary(ctx context.Context, args []string) error {
-	var errBuffer bytes.Buffer
-
-	cmd := exec.CommandContext(ctx, c.ConsulBinary, args...)
-	cmd.Stderr = &errBuffer
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	if err := cmd.Wait(); err != nil {
-		if _, ok := err.(*exec.ExitError); ok {
-			return errors.New(errBuffer.String())
-		}
-		return err
-	}
-
-	return nil
 }
 
 func (c *ConsulMeshService) serviceArgs() []string {

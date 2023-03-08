@@ -6,11 +6,15 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/hashicorp/consul/api v1.20.0
 	github.com/hashicorp/go-hclog v1.4.0
+	github.com/hashicorp/hcl/v2 v2.16.1
 	github.com/spf13/cobra v1.6.1
+	github.com/zclconf/go-cty v1.12.1
 	golang.org/x/sync v0.1.0
 )
 
 require (
+	github.com/agext/levenshtein v1.2.1 // indirect
+	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.1 // indirect
@@ -22,7 +26,9 @@ require (
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
 	github.com/mitchellh/mapstructure v1.4.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
+	golang.org/x/text v0.3.7 // indirect
 )

@@ -9,15 +9,16 @@ This binary helps run testing services on the Consul Service mesh.
 In one window:
 
 ```bash
-➜  consul-services --run --gateway example/gateways/api.hcl -e example/extra --http 3 -d 3
+➜  consul-services --run -r example --http 3 -d 3
 ...
-2023-03-08T00:53:50.545-0500 [INFO]  running gateway: admin=55388 port-one=55389 port-two=55390
+2023-03-08T10:40:08.341-0500 [INFO]  running gateway: admin=55829 ports=[55830, 55831]
+...
 ```
 
 And in another window:
 
 ```bash
-➜  curl localhost:55389 -H "host: test.consul.local"
+➜  curl localhost:55830 -H "host: test.consul.local"
 http-2-3
 ```
 
@@ -26,15 +27,16 @@ http-2-3
 In one window:
 
 ```bash
-➜  consul-services --run --gateway example/gateways/ingress.hcl
+➜  consul-services --run -r example --http 3 -d 3
 ...
-2023-03-08T00:57:57.422-0500 [INFO]  running gateway: admin=56901 port-one=56902 port-two=56903
+2023-03-08T10:40:08.749-0500 [INFO]  running gateway: admin=55862 ports=[55863]
+...
 ```
 
 And in another:
 
 ```bash
-➜  curl localhost:56902
+➜  curl localhost:55863
 http-1-1
 ```
 
@@ -50,11 +52,9 @@ Usage:
 Flags:
       --consul string      Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.
   -d, --duplicates int     Number of duplicate services to register on the mesh. (default 1)
-  -e, --extras string      Path to a folder containing extra configuration entries to write.
-      --gateway string     Path to gateway definition to create, filed should be named 'api.hcl', 'ingress.hcl', etc. with a Port interpolation.
   -h, --help               help for consul-services
       --http int           Number of HTTP-based services to register on the mesh. (default 1)
-  -r, --resources string   Folder of resources to apply, overrides tcp and http flags.
+  -r, --resources string   Path to a folder containing extra configuration entries to write.
       --run                Additionally run Consul binary in agent mode.
       --tcp int            Number of TCP-based services to register on the mesh. (default 1)
 ```
