@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/consul/api v1.20.0
 	github.com/hashicorp/go-hclog v1.4.0
 	github.com/hashicorp/hcl/v2 v2.16.1

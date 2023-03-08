@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"path"
 
 	"github.com/andrewstucki/consul-services/pkg"
 	"github.com/hashicorp/go-hclog"
@@ -16,14 +17,23 @@ const (
 )
 
 var (
+	defaultUnixSocket string
+
 	tcpServiceCount       int
 	httpServiceCount      int
 	duplicateServiceCount int
 	resourceFolder        string
 	consulBinary          string
+	socket                string
 	configFile            string
 	runConsul             bool
 )
+
+func setCommandFlag(cmd *cobra.Command, flag string) {
+	if value := viper.GetString(flag); value != "" {
+		cmd.Flags().Set(flag, value)
+	}
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -41,12 +51,17 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		cmd.Flags().Set("tcp", viper.GetString("tcp"))
-		cmd.Flags().Set("http", viper.GetString("http"))
-		cmd.Flags().Set("duplicates", viper.GetString("duplicates"))
-		cmd.Flags().Set("resources", viper.GetString("resources"))
-		cmd.Flags().Set("consul", viper.GetString("consul"))
-		cmd.Flags().Set("run", viper.GetString("run"))
+		if socket == "" {
+			socket = defaultUnixSocket
+		}
+
+		setCommandFlag(cmd, "tcp")
+		setCommandFlag(cmd, "http")
+		setCommandFlag(cmd, "duplicates")
+		setCommandFlag(cmd, "resources")
+		setCommandFlag(cmd, "consul")
+		setCommandFlag(cmd, "socket")
+		setCommandFlag(cmd, "run")
 
 		return nil
 	},
@@ -62,6 +77,7 @@ var rootCmd = &cobra.Command{
 			ServiceDuplicates: duplicateServiceCount,
 			ResourceFolder:    resourceFolder,
 			ConsulBinary:      consulBinary,
+			Socket:            socket,
 			RunConsul:         runConsul,
 			Logger:            logger,
 		}
@@ -97,6 +113,12 @@ func Execute() {
 }
 
 func init() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+	defaultUnixSocket = path.Join(home, ".consul-services.sock")
+
 	rootCmd.Flags().IntVar(&tcpServiceCount, "tcp", 1, "Number of TCP-based services to register on the mesh.")
 	viper.BindPFlag("tcp", rootCmd.Flags().Lookup("tcp"))
 	rootCmd.Flags().IntVar(&httpServiceCount, "http", 1, "Number of HTTP-based services to register on the mesh.")
@@ -107,6 +129,8 @@ func init() {
 	viper.BindPFlag("resources", rootCmd.Flags().Lookup("resources"))
 	rootCmd.Flags().StringVar(&consulBinary, "consul", "", "Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.")
 	viper.BindPFlag("consul", rootCmd.Flags().Lookup("consul"))
+	rootCmd.Flags().StringVarP(&socket, "socket", "s", "", "Path to unix socket for control server. (default \"$HOME/.consul-services.sock\")")
+	viper.BindPFlag("socket", rootCmd.Flags().Lookup("socket"))
 	rootCmd.Flags().BoolVar(&runConsul, "run", false, "Additionally run Consul binary in agent mode.")
 	viper.BindPFlag("run", rootCmd.Flags().Lookup("run"))
 

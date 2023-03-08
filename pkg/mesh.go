@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/andrewstucki/consul-services/pkg/server"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -22,6 +23,8 @@ type ConsulMeshService struct {
 	Protocol string
 	// OnRegister is a channel to write back to when we've registered our services
 	OnRegister chan struct{}
+	// Server is used for service registration
+	Server *server.Server
 
 	// adminPort is the port allocated for envoy's admin interface
 	adminPort int
@@ -58,6 +61,16 @@ func (c *ConsulMeshService) Run(ctx context.Context) error {
 	}
 
 	c.OnRegister <- struct{}{}
+	c.Server.Register(server.Service{
+		Kind:  "connect-proxy",
+		Name:  c.ID + "-proxy",
+		Ports: []int{c.adminPort, c.proxyPort},
+	})
+	c.Server.Register(server.Service{
+		Kind:  "service",
+		Name:  c.ID,
+		Ports: []int{c.servicePort},
+	})
 
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error {

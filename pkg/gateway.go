@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/andrewstucki/consul-services/pkg/server"
 	"github.com/hashicorp/consul/api"
 )
 
@@ -24,6 +25,8 @@ type ConsulGateway struct {
 	Kind string
 	// DefinitionFile is the path to the file used for registering the gateway
 	DefinitionFile string
+	// Server is used for service registration
+	Server *server.Server
 
 	// adminPort is the port allocated for envoy's admin interface
 	adminPort int
@@ -54,6 +57,12 @@ func (c *ConsulGateway) allocatePorts() error {
 
 func (c *ConsulGateway) runEnvoy(ctx context.Context) error {
 	c.Logger.Info("running gateway", "admin", c.adminPort, "ports", c.tracker.ports)
+
+	c.Server.Register(server.Service{
+		Kind:  c.Kind,
+		Name:  c.Name,
+		Ports: c.tracker.ports,
+	})
 
 	return c.runConsulBinary(ctx, c.gatewayArgs())
 }

@@ -24,6 +24,8 @@ type RunnerConfig struct {
 	ResourceFolder string
 	// ConsulBinary specifies the Consul binary to use for running services.
 	ConsulBinary string
+	// Socket specifies the unix socket that the control server serves traffic on.
+	Socket string
 	// RunConsul specifies whether a Consul agent in dev mode should also be run
 	RunConsul bool
 	// Logger specifies the logger to use for output

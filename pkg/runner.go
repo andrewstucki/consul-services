@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/andrewstucki/consul-services/pkg/server"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -27,6 +28,11 @@ func NewRunner(config RunnerConfig) *Runner {
 // Run runs the desired test services.
 func (r *Runner) Run(ctx context.Context) error {
 	group, ctx := errgroup.WithContext(ctx)
+
+	// we want to register all of our services
+	// with the control server so we can return
+	// information about them
+	controlServer := server.New(r.config.Socket)
 
 	if r.config.RunConsul {
 		consul := &ConsulAgent{
@@ -51,6 +57,7 @@ func (r *Runner) Run(ctx context.Context) error {
 				Name:          httpServiceName(i),
 				Protocol:      protocolHTTP,
 				OnRegister:    r.registrationCh,
+				Server:        controlServer,
 			})
 		}
 	}
@@ -63,6 +70,7 @@ func (r *Runner) Run(ctx context.Context) error {
 				Name:          tcpServiceName(i),
 				Protocol:      protocolTCP,
 				OnRegister:    r.registrationCh,
+				Server:        controlServer,
 			})
 		}
 	}
@@ -115,6 +123,8 @@ REGISTRATION_LOOP:
 			case *ConsulConfigEntry:
 				return e.Write(ctx)
 			case *ConsulGateway:
+				e.Server = controlServer
+
 				group.Go(func() error {
 					return e.Run(ctx)
 				})
@@ -125,6 +135,11 @@ REGISTRATION_LOOP:
 			return err
 		}
 	}
+
+	// finally run our control server
+	group.Go(func() error {
+		return controlServer.Run(ctx)
+	})
 
 	return group.Wait()
 }
