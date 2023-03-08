@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -34,6 +35,27 @@ func NewClient(socket string) *Client {
 		SocketPath: socket,
 		client:     client,
 	}
+}
+
+// Shutdown stops all running services.
+func (c *Client) Shutdown() error {
+	response, err := c.client.Get(requestPath("/shutdown"))
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return fmt.Errorf("code: %d, message: %q", response.StatusCode, string(body))
 }
 
 // Get gets a controlled service.

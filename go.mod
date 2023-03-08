@@ -1,9 +1,10 @@
 module github.com/andrewstucki/consul-services
 
-go 1.19
+go 1.20
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
+	github.com/docker/docker v23.0.1+incompatible
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/consul/api v1.20.0
 	github.com/hashicorp/go-hclog v1.4.0
@@ -46,4 +47,5 @@ require (
 	golang.org/x/text v0.7.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools/v3 v3.4.0 // indirect
 )

@@ -5,8 +5,11 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 
 	"github.com/andrewstucki/consul-services/pkg"
+	"github.com/andrewstucki/consul-services/pkg/daemonize"
+	"github.com/docker/docker/pkg/reexec"
 	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -25,8 +28,10 @@ var (
 	resourceFolder        string
 	consulBinary          string
 	socket                string
+	output                string
 	configFile            string
 	runConsul             bool
+	daemonizeRunner       bool
 )
 
 func setCommandFlag(cmd *cobra.Command, flag string) {
@@ -67,10 +72,21 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		logger := hclog.Default()
+
+		outputSink := os.Stdout
+		if output != "" {
+			sink, err := os.Create(output)
+			if err != nil {
+				logger.Error("error opening up output sink", "err", err)
+				os.Exit(1)
+			}
+			defer sink.Close()
+			outputSink = sink
+		}
+
 		retcode := 0
 		defer func() { os.Exit(retcode) }()
-
-		logger := hclog.Default()
 
 		config := pkg.RunnerConfig{
 			TCPServiceCount:   tcpServiceCount,
@@ -84,10 +100,26 @@ var rootCmd = &cobra.Command{
 		}
 
 		if err := config.Validate(); err != nil {
-			logger.Error("Error configuring service runners", "err", err)
+			logger.Error("error configuring service runners", "err", err)
 			retcode = 1
 			return
 		}
+
+		// run the daemonization after validation
+		// so we know we're likely to succeed at running
+		// the child processes
+		if daemonizeRunner {
+			if err := daemonize.Daemonize(daemonArgs()...); err != nil {
+				logger.Error("could not daemonize process", "err", err)
+				retcode = 1
+			}
+			return
+		}
+
+		// set the actual output here
+		config.SetLogger(hclog.New(&hclog.LoggerOptions{
+			Output: outputSink,
+		}))
 
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer cancel()
@@ -97,7 +129,7 @@ var rootCmd = &cobra.Command{
 			select {
 			case <-ctx.Done():
 			default:
-				logger.Error("Error running services", "err", err)
+				config.Logger.Error("Error running services", "err", err)
 				retcode = 1
 			}
 		}
@@ -115,16 +147,15 @@ func Execute() {
 
 func init() {
 	home, err := os.UserHomeDir()
-	if err != nil {
-		panic(err)
+	if err == nil {
+		defaultUnixSocket = path.Join(home, ".consul-services.sock")
 	}
-	defaultUnixSocket = path.Join(home, ".consul-services.sock")
 
 	rootCmd.Flags().IntVar(&tcpServiceCount, "tcp", 1, "Number of TCP-based services to register on the mesh.")
 	viper.BindPFlag("tcp", rootCmd.Flags().Lookup("tcp"))
 	rootCmd.Flags().IntVar(&httpServiceCount, "http", 1, "Number of HTTP-based services to register on the mesh.")
 	viper.BindPFlag("http", rootCmd.Flags().Lookup("http"))
-	rootCmd.Flags().IntVarP(&duplicateServiceCount, "duplicates", "d", 1, "Number of duplicate services to register on the mesh.")
+	rootCmd.Flags().IntVarP(&duplicateServiceCount, "duplicates", "D", 1, "Number of duplicate services to register on the mesh.")
 	viper.BindPFlag("duplicates", rootCmd.Flags().Lookup("duplicates"))
 	rootCmd.Flags().StringVarP(&resourceFolder, "resources", "r", "", "Path to a folder containing extra configuration entries to write.")
 	viper.BindPFlag("resources", rootCmd.Flags().Lookup("resources"))
@@ -134,9 +165,37 @@ func init() {
 	viper.BindPFlag("socket", rootCmd.PersistentFlags().Lookup("socket"))
 	rootCmd.Flags().BoolVar(&runConsul, "run", false, "Additionally run Consul binary in agent mode.")
 	viper.BindPFlag("run", rootCmd.Flags().Lookup("run"))
+	rootCmd.PersistentFlags().StringVarP(&output, "output", "o", "", "Path to use for output rather than stdout.")
+	viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
 
 	rootCmd.Flags().StringVarP(&configFile, "config", "c", defaultConfigFilename, "Path to configuration file.")
+	rootCmd.Flags().BoolVarP(&daemonizeRunner, "daemon", "d", false, "Daemonize the process.")
+	daemonize.SetDaemonizationFlag("--daemon", "-d")
 
 	viper.AddConfigPath(".")
 	viper.SetConfigType("yaml")
+}
+
+func daemonArgs() []string {
+	daemonOut := output
+	if daemonOut == "" {
+		daemonOut = "daemon.log"
+	}
+
+	args := []string{
+		reexec.Self(),
+		"--tcp", strconv.Itoa(tcpServiceCount),
+		"--http", strconv.Itoa(httpServiceCount),
+		"--duplicates", strconv.Itoa(duplicateServiceCount),
+		"--resources", resourceFolder,
+		"--socket", socket,
+		"--config", configFile,
+		"--consul", consulBinary,
+		"--output", daemonOut,
+	}
+	if runConsul {
+		args = append(args, "--run")
+	}
+
+	return args
 }

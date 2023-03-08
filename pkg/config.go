@@ -2,6 +2,8 @@ package pkg
 
 import (
 	"errors"
+	"fmt"
+	"os"
 
 	"github.com/hashicorp/go-hclog"
 )
@@ -35,8 +37,18 @@ type RunnerConfig struct {
 	consulCommand *ConsulCommand
 }
 
+// SetLogger resets the underlying logger.
+func (c *RunnerConfig) SetLogger(logger hclog.Logger) {
+	c.Logger = logger
+	c.consulCommand.Logger = logger
+}
+
 // Validate validates the runner configuration.
 func (c *RunnerConfig) Validate() error {
+	if err := c.validateSocket(); err != nil {
+		return err
+	}
+
 	if err := c.validateConsul(); err != nil {
 		return err
 	}
@@ -59,6 +71,14 @@ func (c *RunnerConfig) validateServiceCounts() error {
 	}
 	if c.ServiceDuplicates <= 0 {
 		return errors.New("service duplicates must be greater than or equal to 1")
+	}
+	return nil
+}
+
+func (c *RunnerConfig) validateSocket() error {
+	_, err := os.Stat(c.Socket)
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("existing socket found: %q", c.Socket)
 	}
 	return nil
 }

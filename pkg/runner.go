@@ -28,6 +28,8 @@ func NewRunner(config RunnerConfig) *Runner {
 // Run runs the desired test services.
 func (r *Runner) Run(ctx context.Context) error {
 	group, ctx := errgroup.WithContext(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// we want to register all of our services
 	// with the control server so we can return
@@ -46,7 +48,12 @@ func (r *Runner) Run(ctx context.Context) error {
 		})
 
 		if err := consul.ready(ctx); err != nil {
-			return err
+			select {
+			case <-ctx.Done():
+				return group.Wait()
+			default:
+				return err
+			}
 		}
 	}
 
@@ -135,7 +142,12 @@ REGISTRATION_LOOP:
 
 			return nil
 		}); err != nil {
-			return err
+			select {
+			case <-ctx.Done():
+				return group.Wait()
+			default:
+				return err
+			}
 		}
 	}
 

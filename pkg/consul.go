@@ -15,7 +15,7 @@ type ConsulAgent struct {
 
 // Run runs the Consul agent
 func (c *ConsulAgent) Run(ctx context.Context) error {
-	return c.runConsulBinary(ctx, []string{"agent", "-dev"})
+	return c.runConsulBinary(ctx, nil, []string{"agent", "-dev"})
 }
 
 func (c *ConsulAgent) ready(ctx context.Context) error {

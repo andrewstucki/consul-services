@@ -62,12 +62,6 @@ func (c *ConsulMeshService) Run(ctx context.Context) error {
 
 	c.OnRegister <- struct{}{}
 	c.Server.Register(server.Service{
-		Kind:      "connect-proxy",
-		Name:      c.ID + "-proxy",
-		AdminPort: c.adminPort,
-		Ports:     []int{c.proxyPort},
-	})
-	c.Server.Register(server.Service{
 		Kind:  "service",
 		Name:  c.ID,
 		Ports: []int{c.servicePort},
@@ -107,19 +101,19 @@ func (c *ConsulMeshService) allocatePorts() error {
 func (c *ConsulMeshService) registerService(ctx context.Context) error {
 	c.Logger.Info("registering service")
 
-	return c.runConsulBinary(ctx, c.serviceArgs())
+	return c.runConsulBinary(ctx, nil, c.serviceArgs())
 }
 
 func (c *ConsulMeshService) registerServiceProxy(ctx context.Context) error {
 	c.Logger.Info("registering sidecar proxy")
 
-	return c.runConsulBinary(ctx, c.serviceProxyArgs())
+	return c.runConsulBinary(ctx, nil, c.serviceProxyArgs())
 }
 
 func (c *ConsulMeshService) writeServiceDefaults(ctx context.Context) error {
 	c.Logger.Info("writing service defaults")
 
-	return c.runConsulBinary(ctx, c.serviceDefaultsArgs())
+	return c.runConsulBinary(ctx, nil, c.serviceDefaultsArgs())
 }
 
 func (c *ConsulMeshService) runService(ctx context.Context) error {
@@ -137,7 +131,15 @@ func (c *ConsulMeshService) runService(ctx context.Context) error {
 func (c *ConsulMeshService) runEnvoy(ctx context.Context) error {
 	c.Logger.Info("running sidecar")
 
-	return c.runConsulBinary(ctx, c.sidecarArgs())
+	return c.runConsulBinary(ctx, func(log string) {
+		c.Server.Register(server.Service{
+			Kind:      "connect-proxy",
+			Name:      c.ID + "-proxy",
+			AdminPort: c.adminPort,
+			Ports:     []int{c.proxyPort},
+			Logs:      log,
+		})
+	}, c.sidecarArgs())
 }
 
 func (c *ConsulMeshService) serviceArgs() []string {
@@ -166,6 +168,7 @@ func (c *ConsulMeshService) sidecarArgs() []string {
 		"connect", "envoy",
 		"-sidecar-for", c.ID,
 		"-admin-bind", fmt.Sprintf("127.0.0.1:%d", c.adminPort),
+		"--", "-l", "trace",
 	}
 }
 

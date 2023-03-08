@@ -58,14 +58,15 @@ func (c *ConsulGateway) allocatePorts() error {
 func (c *ConsulGateway) runEnvoy(ctx context.Context) error {
 	c.Logger.Info("running gateway", "admin", c.adminPort, "ports", c.tracker.ports)
 
-	c.Server.Register(server.Service{
-		Kind:      c.Kind,
-		Name:      c.Name,
-		AdminPort: c.adminPort,
-		Ports:     c.tracker.ports,
-	})
-
-	return c.runConsulBinary(ctx, c.gatewayArgs())
+	return c.runConsulBinary(ctx, func(log string) {
+		c.Server.Register(server.Service{
+			Kind:      c.Kind,
+			Name:      c.Name,
+			AdminPort: c.adminPort,
+			Ports:     c.tracker.ports,
+			Logs:      log,
+		})
+	}, c.gatewayArgs())
 }
 
 func (c *ConsulGateway) gatewayArgs() []string {
@@ -81,5 +82,8 @@ func (c *ConsulGateway) gatewayArgs() []string {
 	if len(c.tracker.ports) > 0 && c.Kind == "api" {
 		args = append(args, "-address", fmt.Sprintf("127.0.0.1:%d", c.tracker.ports[0]))
 	}
+
+	args = append(args, "--", "-l", "trace")
+
 	return args
 }

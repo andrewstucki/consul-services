@@ -30,7 +30,7 @@ func (c *ConsulConfigEntry) Write(ctx context.Context) error {
 		return err
 	}
 
-	return c.runConsulBinary(ctx, []string{
+	return c.runConsulBinary(ctx, nil, []string{
 		"config", "write",
 		c.renderedFile(),
 	})

@@ -22,6 +22,8 @@ type Server struct {
 	services []Service
 	// mutex guards the service registration
 	mutex sync.RWMutex
+	// server is a handle to the http server
+	server *http.Server
 }
 
 // New creates a new control server.
@@ -34,26 +36,36 @@ func New(path string) *Server {
 // Run runs the control server.
 func (s *Server) Run(ctx context.Context) error {
 	router := mux.NewRouter()
+	router.HandleFunc("/shutdown", s.shutdown)
 	router.HandleFunc("/services", s.listServices)
 	router.HandleFunc("/services/{kind}/{name}", s.getService)
 
-	server := http.Server{
+	s.server = &http.Server{
 		Handler: router,
 		BaseContext: func(l net.Listener) context.Context {
 			return ctx
 		},
 	}
-	defer server.Close()
+	defer s.server.Close()
 
 	listener, err := net.Listen("unix", s.SocketPath)
 	if err != nil {
 		return err
 	}
 
-	go server.Serve(listener)
+	errChannel := make(chan error, 1)
+	go func() {
+		if err := s.server.Serve(listener); err != nil {
+			errChannel <- err
+		}
+	}()
 
-	<-ctx.Done()
-	return nil
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-errChannel:
+		return err
+	}
 }
 
 // Register adds the service to the control server.
@@ -62,6 +74,10 @@ func (s *Server) Register(svc Service) {
 	defer s.mutex.Unlock()
 
 	s.services = append(s.services, svc)
+}
+
+func (s *Server) shutdown(w http.ResponseWriter, r *http.Request) {
+	defer s.server.Shutdown(context.Background())
 }
 
 func (s *Server) listServices(w http.ResponseWriter, r *http.Request) {

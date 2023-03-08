@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sync"
 
 	"github.com/hashicorp/go-hclog"
 )
@@ -20,6 +23,9 @@ type ConsulCommand struct {
 	Folder string
 	// Logger is the logger used for logging messages
 	Logger hclog.Logger
+
+	processes []*exec.Cmd
+	mutex     sync.Mutex
 }
 
 func newCommand(binary string, logger hclog.Logger) (*ConsulCommand, error) {
@@ -33,23 +39,50 @@ func newCommand(binary string, logger hclog.Logger) (*ConsulCommand, error) {
 		return nil, err
 	}
 
-	return &ConsulCommand{
+	cmd := &ConsulCommand{
 		ConsulBinary: consul,
 		Folder:       folder,
 		Logger:       logger,
-	}, nil
+	}
+
+	runtime.SetFinalizer(cmd, func(c *ConsulCommand) {
+		cmd.Cleanup()
+	})
+
+	return cmd, nil
 }
 
 // Cleanup cleans up system resources after we're done
 func (c *ConsulCommand) Cleanup() {
+	c.mutex.Lock()
+	for _, cmd := range c.processes {
+		cmd.Cancel()
+	}
+	c.mutex.Unlock()
 	os.RemoveAll(c.Folder)
 }
 
-func (c *ConsulCommand) runConsulBinary(ctx context.Context, args []string) error {
+func (c *ConsulCommand) runConsulBinary(ctx context.Context, logFn func(log string), args []string) error {
+	output, err := os.CreateTemp(c.Folder, "process-*.log")
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+
+	if logFn != nil {
+		logFn(output.Name())
+	}
+
 	var errBuffer bytes.Buffer
+	writer := io.MultiWriter(&errBuffer, output)
 
 	cmd := exec.CommandContext(ctx, c.ConsulBinary, args...)
-	cmd.Stderr = &errBuffer
+	cmd.Stderr = writer
+	cmd.Stdout = output
+
+	c.mutex.Lock()
+	c.processes = append(c.processes, cmd)
+	c.mutex.Unlock()
 
 	if err := cmd.Start(); err != nil {
 		return err
