@@ -3,8 +3,11 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/gorilla/mux"
@@ -32,6 +35,7 @@ func New(path string) *Server {
 func (s *Server) Run(ctx context.Context) error {
 	router := mux.NewRouter()
 	router.HandleFunc("/services", s.listServices)
+	router.HandleFunc("/services/{kind}/{name}", s.getService)
 
 	server := http.Server{
 		Handler: router,
@@ -61,11 +65,56 @@ func (s *Server) Register(svc Service) {
 }
 
 func (s *Server) listServices(w http.ResponseWriter, r *http.Request) {
+	kindsParam := r.URL.Query().Get("kinds")
+	kinds := map[string]bool{}
+	if kindsParam != "" {
+		for _, kind := range strings.Split(kindsParam, ",") {
+			kinds[kind] = true
+		}
+	}
+
 	encoder := json.NewEncoder(w)
 
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
+	services := []Service{}
+	for _, service := range s.services {
+		if len(kinds) == 0 || kinds[service.Kind] {
+			services = append(services, service)
+		}
+	}
+
+	sort.SliceStable(services, func(i, j int) bool {
+		if services[i].Kind != services[j].Kind {
+			return services[i].Kind < services[j].Kind
+		}
+		return services[i].Name < services[j].Name
+	})
+
 	w.Header().Set("content-type", "application/json")
-	encoder.Encode(s.services)
+	encoder.Encode(services)
+}
+
+func (s *Server) getService(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	kind := params["kind"]
+	name := params["name"]
+
+	encoder := json.NewEncoder(w)
+
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	for _, service := range s.services {
+		if kind == service.Kind && name == service.Name {
+			w.Header().Set("content-type", "application/json")
+			encoder.Encode(service)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprintf(w, "not found")
 }

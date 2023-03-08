@@ -39,6 +39,11 @@ func setCommandFlag(cmd *cobra.Command, flag string) {
 var rootCmd = &cobra.Command{
 	Use:   "consul-services",
 	Short: "Boots and registers a series of Consul service mesh services used in testing",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if socket == "" {
+			socket = defaultUnixSocket
+		}
+	},
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if configFile != "" {
 			viper.SetConfigFile(configFile)
@@ -49,10 +54,6 @@ var rootCmd = &cobra.Command{
 			if !os.IsNotExist(err) {
 				return err
 			}
-		}
-
-		if socket == "" {
-			socket = defaultUnixSocket
 		}
 
 		setCommandFlag(cmd, "tcp")
@@ -129,8 +130,8 @@ func init() {
 	viper.BindPFlag("resources", rootCmd.Flags().Lookup("resources"))
 	rootCmd.Flags().StringVar(&consulBinary, "consul", "", "Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.")
 	viper.BindPFlag("consul", rootCmd.Flags().Lookup("consul"))
-	rootCmd.Flags().StringVarP(&socket, "socket", "s", "", "Path to unix socket for control server. (default \"$HOME/.consul-services.sock\")")
-	viper.BindPFlag("socket", rootCmd.Flags().Lookup("socket"))
+	rootCmd.PersistentFlags().StringVarP(&socket, "socket", "s", "", "Path to unix socket for control server. (default \"$HOME/.consul-services.sock\")")
+	viper.BindPFlag("socket", rootCmd.PersistentFlags().Lookup("socket"))
 	rootCmd.Flags().BoolVar(&runConsul, "run", false, "Additionally run Consul binary in agent mode.")
 	viper.BindPFlag("run", rootCmd.Flags().Lookup("run"))
 

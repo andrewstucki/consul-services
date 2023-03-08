@@ -33,6 +33,9 @@ func (r *Runner) Run(ctx context.Context) error {
 	// with the control server so we can return
 	// information about them
 	controlServer := server.New(r.config.Socket)
+	group.Go(func() error {
+		return controlServer.Run(ctx)
+	})
 
 	if r.config.RunConsul {
 		consul := &ConsulAgent{
@@ -135,11 +138,6 @@ REGISTRATION_LOOP:
 			return err
 		}
 	}
-
-	// finally run our control server
-	group.Go(func() error {
-		return controlServer.Run(ctx)
-	})
 
 	return group.Wait()
 }
