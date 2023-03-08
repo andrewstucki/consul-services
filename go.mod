@@ -26,5 +26,3 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10 // indirect
 )
-
-replace github.com/hashicorp/consul/api v1.20.0 => /Users/andrewstucki/Code/work/consul/api
