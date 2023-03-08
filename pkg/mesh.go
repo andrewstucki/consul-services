@@ -62,9 +62,10 @@ func (c *ConsulMeshService) Run(ctx context.Context) error {
 
 	c.OnRegister <- struct{}{}
 	c.Server.Register(server.Service{
-		Kind:  "connect-proxy",
-		Name:  c.ID + "-proxy",
-		Ports: []int{c.adminPort, c.proxyPort},
+		Kind:      "connect-proxy",
+		Name:      c.ID + "-proxy",
+		AdminPort: c.adminPort,
+		Ports:     []int{c.proxyPort},
 	})
 	c.Server.Register(server.Service{
 		Kind:  "service",

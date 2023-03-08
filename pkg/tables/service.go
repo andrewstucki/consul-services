@@ -17,7 +17,7 @@ func PrintServices(w io.Writer, services []server.Service) {
 	}
 
 	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Kind", "Name", "Ports"})
+	table.SetHeader([]string{"Kind", "Name", "Admin Port", "Ports"})
 	table.SetRowLine(true)
 	table.AppendBulk(serviceTable)
 
@@ -29,5 +29,11 @@ func formatService(service server.Service) []string {
 	for _, port := range service.Ports {
 		ports = append(ports, strconv.Itoa(port))
 	}
-	return []string{service.Kind, service.Name, strings.Join(ports, ", ")}
+
+	adminPort := ""
+	if service.AdminPort != 0 {
+		adminPort = strconv.Itoa(service.AdminPort)
+	}
+
+	return []string{service.Kind, service.Name, adminPort, strings.Join(ports, ", ")}
 }

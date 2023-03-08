@@ -51,6 +51,7 @@ Usage:
   consul-services [command]
 
 Available Commands:
+  admin       Opens the envoy admin panel for a given service.
   completion  Generate the autocompletion script for the specified shell
   get         Gets a particular service
   help        Help about any command

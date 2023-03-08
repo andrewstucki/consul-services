@@ -4,7 +4,7 @@
 - [ ] Allow the service runs to be daemonized similar to a `docker compose up -d`.
 - [ ] With the above, add a teardown command like `docker compose down`.
 - [ ] Add a log follower so we can look at logs of daemonized services.
-- [ ] Add an admin opener where we can immediately open the admin interface pages for any proxies.
+- [x] Add an admin opener where we can immediately open the admin interface pages for any proxies.
 - [ ] Add the ability to spin up external services easily that can be routed through the mesh via terminating gateways (likely will need a paired trigger to act as a request proxy).
 - [ ] Add the ability to spin up resources in multiple consul dcs and have the dcs be connected via mesh gateways.
 
