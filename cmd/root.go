@@ -75,7 +75,7 @@ func init() {
 	rootCmd.Flags().IntVarP(&duplicateServiceCount, "duplicates", "d", 1, "Number of duplicate services to register on the mesh.")
 	rootCmd.Flags().StringVarP(&resourceFolder, "resources", "r", "", "Folder of resources to apply, overrides tcp and http flags.")
 	rootCmd.Flags().StringVar(&consulBinary, "consul", "", "Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.")
-	rootCmd.Flags().StringVar(&gatewayFile, "gateway", "", "Path to gateway definition to create, filed should be named 'api.hcl', 'ingress.hcl', etc. witha Port interpolation.")
+	rootCmd.Flags().StringVar(&gatewayFile, "gateway", "", "Path to gateway definition to create, filed should be named 'api.hcl', 'ingress.hcl', etc. with a Port interpolation.")
 	rootCmd.Flags().StringVarP(&extraFilesFolder, "extras", "e", "", "Path to a folder containing extra configuration entries to write.")
 	rootCmd.Flags().BoolVar(&runConsul, "run", false, "Additionally run Consul binary in agent mode.")
 }

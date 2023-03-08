@@ -5,6 +5,12 @@ Rules = [
     Services = [
       {
         Name = "http-1"
+      },
+      {
+        Name = "http-2"
+      },
+      {
+        Name = "http-3"
       }
     ]
   }  
