@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -98,6 +99,10 @@ REGISTRATION_LOOP:
 			}
 
 			if info.IsDir() {
+				return nil
+			}
+
+			if !strings.HasSuffix(info.Name(), ".hcl") {
 				return nil
 			}
 

@@ -1,0 +1,5 @@
+tcp: 3
+http: 3
+duplicates: 3
+run: true
+resources: example

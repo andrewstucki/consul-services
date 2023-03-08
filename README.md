@@ -9,7 +9,9 @@ This binary helps run testing services on the Consul Service mesh.
 In one window:
 
 ```bash
-➜  consul-services --run -r example --http 3 -d 3
+➜  consul-services -c example/consul-services.yaml
+# or
+➜  consul-services --run -r example --http 3 --tcp 3 -d 3
 ...
 2023-03-08T10:40:08.341-0500 [INFO]  running gateway: admin=55829 ports=[55830, 55831]
 ...
@@ -50,6 +52,7 @@ Usage:
   consul-services [flags]
 
 Flags:
+  -c, --config string      Path to configuration file. (default ".consul-services.yaml")
       --consul string      Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.
   -d, --duplicates int     Number of duplicate services to register on the mesh. (default 1)
   -h, --help               help for consul-services
