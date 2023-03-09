@@ -21,6 +21,8 @@ const (
 )
 
 type templateArgs struct {
+	*tracker
+
 	// the id of the service
 	ID string
 	// the name of the service

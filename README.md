@@ -4,40 +4,50 @@ This binary helps run testing services on the Consul Service mesh.
 
 ## Example
 
-### API Gateway
-
-In one window:
+Boot up the services in the background:
 
 ```bash
-➜  consul-services -c example/consul-services.yaml
+consul-services -c example/consul-services.yaml -d
 # or
-➜  consul-services --run -r example --http 3 --tcp 3 -d 3
+consul-services --run -r example --http 3 --tcp 3 -D 3 -d
 ```
 
-And in another window:
+Test the API gateway:
 
 ```bash
-➜  GATEWAY_HTTP_PORT=$(consul-services get api -k api -f '.Ports[0]')
-➜  curl localhost:$GATEWAY_HTTP_PORT -H "host: test.consul.local"
-http-2-3
+GATEWAY_HTTP_PORT=$(consul-services get api -k api -f '.NamedPorts.one')
+curl localhost:$GATEWAY_HTTP_PORT -H "host: test.consul.local"
 ```
 
-### Ingress Gateway
-
-In one window:
+Test the ingress gateway:
 
 ```bash
-➜  consul-services -c example/consul-services.yaml
-# or
-➜  consul-services --run -r example --http 3 --tcp 3 -d 3
+INGRESS_HTTP_PORT=$(consul-services get ingress -k ingress -f '.Ports[0]')
+curl localhost:$INGRESS_HTTP_PORT
 ```
 
-And in another:
+Open up the admin interface of the API gateway:
 
 ```bash
-➜  INGRESS_HTTP_PORT=$(consul-services get ingress -k ingress -f '.Ports[0]')
-➜  curl localhost:$INGRESS_HTTP_PORT
-http-1-2
+consul-services admin api -k api
+```
+
+Check the logs of the API gateway:
+
+```bash
+consul-services logs api -k api
+```
+
+List all services:
+
+```bash
+consul-services list -a
+```
+
+Stop the services
+
+```bash
+consul-services stop
 ```
 
 ## Usage
@@ -56,13 +66,17 @@ Available Commands:
   get         Gets a particular service
   help        Help about any command
   list        Lists the services currently running.
+  logs        Read logs from a deployed service.
+  stop        Stops a daemonized run
 
 Flags:
   -c, --config string      Path to configuration file. (default ".consul-services.yaml")
       --consul string      Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.
-  -d, --duplicates int     Number of duplicate services to register on the mesh. (default 1)
+  -d, --daemon             Daemonize the process.
+  -D, --duplicates int     Number of duplicate services to register on the mesh. (default 1)
   -h, --help               help for consul-services
       --http int           Number of HTTP-based services to register on the mesh. (default 1)
+  -o, --output string      Path to use for output rather than stdout.
   -r, --resources string   Path to a folder containing extra configuration entries to write.
       --run                Additionally run Consul binary in agent mode.
   -s, --socket string      Path to unix socket for control server. (default "$HOME/.consul-services.sock")

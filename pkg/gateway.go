@@ -60,11 +60,12 @@ func (c *ConsulGateway) runEnvoy(ctx context.Context) error {
 
 	return c.runConsulBinary(ctx, func(log string) {
 		c.Server.Register(server.Service{
-			Kind:      c.Kind,
-			Name:      c.Name,
-			AdminPort: c.adminPort,
-			Ports:     c.tracker.ports,
-			Logs:      log,
+			Kind:       c.Kind,
+			Name:       c.Name,
+			AdminPort:  c.adminPort,
+			Ports:      c.tracker.ports,
+			NamedPorts: c.tracker.namedPorts,
+			Logs:       log,
 		})
 	}, c.gatewayArgs())
 }

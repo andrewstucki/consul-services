@@ -3,13 +3,13 @@ Name = "api"
 Listeners = [
   {
     Name     = "listener-one"
-    Port     = {{ .GetPort }}
+    Port     = {{ .GetNamedPort "one" }}
     Protocol = "http"
     Hostname = "*.consul.local"
   },
   {
     Name     = "listener-two"
-    Port     = {{ .GetPort }}
+    Port     = {{ .GetNamedPort "two" }}
     Protocol = "http"
     Hostname = "*.consul.local"
     TLS = {

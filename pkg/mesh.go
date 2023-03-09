@@ -32,6 +32,8 @@ type ConsulMeshService struct {
 	proxyPort int
 	// servicePort is the port allocated for the service
 	servicePort int
+	// tracker holds any dynamic allocations
+	tracker *tracker
 }
 
 // Run runs the Consul mesh service
@@ -133,11 +135,12 @@ func (c *ConsulMeshService) runEnvoy(ctx context.Context) error {
 
 	return c.runConsulBinary(ctx, func(log string) {
 		c.Server.Register(server.Service{
-			Kind:      "connect-proxy",
-			Name:      c.ID + "-proxy",
-			AdminPort: c.adminPort,
-			Ports:     []int{c.proxyPort},
-			Logs:      log,
+			Kind:       "connect-proxy",
+			Name:       c.ID + "-proxy",
+			AdminPort:  c.adminPort,
+			Ports:      append([]int{c.proxyPort}, c.tracker.ports...),
+			NamedPorts: c.tracker.namedPorts,
+			Logs:       log,
 		})
 	}, c.sidecarArgs())
 }
@@ -208,6 +211,7 @@ func (c *ConsulMeshService) executeTemplate(name string) ([]byte, error) {
 	var buffer bytes.Buffer
 
 	if err := getTemplate(name).Execute(&buffer, &templateArgs{
+		tracker:     c.tracker,
 		ID:          c.ID,
 		Name:        c.Name,
 		Protocol:    c.Protocol,

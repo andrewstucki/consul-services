@@ -68,6 +68,7 @@ func (r *Runner) Run(ctx context.Context) error {
 				Protocol:      protocolHTTP,
 				OnRegister:    r.registrationCh,
 				Server:        controlServer,
+				tracker:       newTracker(),
 			})
 		}
 	}
@@ -81,6 +82,7 @@ func (r *Runner) Run(ctx context.Context) error {
 				Protocol:      protocolTCP,
 				OnRegister:    r.registrationCh,
 				Server:        controlServer,
+				tracker:       newTracker(),
 			})
 		}
 	}

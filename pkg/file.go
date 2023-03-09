@@ -28,6 +28,10 @@ func (d *dummyFileArgs) GetCertificate(name string, sans ...string) *Certificate
 	return &CertificateInfo{}
 }
 
+func (d *dummyFileArgs) GetNamedPort(name string) (int, error) {
+	return 0, nil
+}
+
 func parseFile(path string) (*file, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -94,7 +98,7 @@ func parseFileIntoEntry(command *ConsulCommand, definition string) (interface{},
 	entry := &ConsulConfigEntry{
 		ConsulCommand:  command,
 		DefinitionFile: definition,
-		tracker:        &tracker{},
+		tracker:        newTracker(),
 	}
 
 	if _, ok := knownGateways[file.Kind]; ok {
