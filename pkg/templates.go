@@ -35,7 +35,7 @@ type templateArgs struct {
 	// the protocol to use
 	Protocol string
 	// external upstreams to add
-	ExternalUpstreams []*ConsulExternalService
+	ExternalUpstreams []string
 }
 
 var (

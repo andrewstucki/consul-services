@@ -25,8 +25,8 @@ type ConsulMeshService struct {
 	OnRegister chan struct{}
 	// Server is used for service registration
 	Server *server.Server
-	// ExternalServices are the external services to add upstreams for
-	ExternalServices []*ConsulExternalService
+	// ExternalUpstreams are the external services to add upstreams for
+	ExternalUpstreams []string
 
 	// adminPort is the port allocated for envoy's admin interface
 	adminPort int
@@ -219,7 +219,7 @@ func (c *ConsulMeshService) executeTemplate(name string) ([]byte, error) {
 		Protocol:          c.Protocol,
 		ServicePort:       c.servicePort,
 		ProxyPort:         c.proxyPort,
-		ExternalUpstreams: c.ExternalServices,
+		ExternalUpstreams: c.ExternalUpstreams,
 	}); err != nil {
 		return nil, err
 	}

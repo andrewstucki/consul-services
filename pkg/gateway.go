@@ -51,6 +51,17 @@ func (c *ConsulGateway) allocatePorts() error {
 		return err
 	}
 
+	if c.Kind != "api" {
+		// we allocate an additional port here and grab
+		// it as the first allocation in our registration so that
+		// we can run all the gateways on different ports
+		// rather than just defaulting to 8443
+		_, err := c.tracker.GetPort()
+		if err != nil {
+			return err
+		}
+	}
+
 	c.adminPort = adminPort
 	return nil
 }
@@ -80,10 +91,9 @@ func (c *ConsulGateway) gatewayArgs() []string {
 		"-admin-bind", fmt.Sprintf("127.0.0.1:%d", c.adminPort),
 	}
 
-	if len(c.tracker.ports) > 0 && c.Kind == "api" {
+	if len(c.tracker.ports) > 0 {
 		args = append(args, "-address", fmt.Sprintf("127.0.0.1:%d", c.tracker.ports[0]))
 	}
-
 	args = append(args, "--", "-l", "trace")
 
 	return args

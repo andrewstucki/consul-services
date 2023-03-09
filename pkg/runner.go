@@ -57,7 +57,7 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	externalServices := r.initializeExternalServices(controlServer)
+	upstreams, externalServices := r.initializeExternalServices(controlServer)
 	for i := range externalServices {
 		service := externalServices[i]
 
@@ -67,7 +67,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	r.waitForNRegistrations(ctx, len(externalServices))
 
-	meshServices := r.initializeMeshServices(controlServer, externalServices)
+	meshServices := r.initializeMeshServices(controlServer, upstreams)
 	for i := range meshServices {
 		service := meshServices[i]
 
@@ -140,10 +140,12 @@ func (r *Runner) waitForNRegistrations(ctx context.Context, n int) {
 	}
 }
 
-func (r *Runner) initializeExternalServices(server *server.Server) []*ConsulExternalService {
+func (r *Runner) initializeExternalServices(server *server.Server) ([]string, []*ConsulExternalService) {
+	upstreams := []string{}
 	services := []*ConsulExternalService{}
 
 	for i := 1; i <= r.config.ExternalHTTPServiceCount; i++ {
+		upstreams = append(upstreams, httpExternalServiceName(i))
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulExternalService{
 				ConsulCommand: r.config.consulCommand,
@@ -158,6 +160,7 @@ func (r *Runner) initializeExternalServices(server *server.Server) []*ConsulExte
 	}
 
 	for i := 1; i <= r.config.ExternalTCPServiceCount; i++ {
+		upstreams = append(upstreams, tcpExternalServiceName(i))
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulExternalService{
 				ConsulCommand: r.config.consulCommand,
@@ -171,23 +174,23 @@ func (r *Runner) initializeExternalServices(server *server.Server) []*ConsulExte
 		}
 	}
 
-	return services
+	return upstreams, services
 }
 
-func (r *Runner) initializeMeshServices(server *server.Server, externalServices []*ConsulExternalService) []*ConsulMeshService {
+func (r *Runner) initializeMeshServices(server *server.Server, upstreams []string) []*ConsulMeshService {
 	services := []*ConsulMeshService{}
 
 	for i := 1; i <= r.config.HTTPServiceCount; i++ {
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulMeshService{
-				ConsulCommand:    r.config.consulCommand,
-				ID:               httpServiceID(i, j),
-				Name:             httpServiceName(i),
-				Protocol:         protocolHTTP,
-				OnRegister:       r.registrationCh,
-				Server:           server,
-				ExternalServices: externalServices,
-				tracker:          newTracker(),
+				ConsulCommand:     r.config.consulCommand,
+				ID:                httpServiceID(i, j),
+				Name:              httpServiceName(i),
+				Protocol:          protocolHTTP,
+				OnRegister:        r.registrationCh,
+				Server:            server,
+				ExternalUpstreams: upstreams,
+				tracker:           newTracker(),
 			})
 		}
 	}
@@ -195,14 +198,14 @@ func (r *Runner) initializeMeshServices(server *server.Server, externalServices 
 	for i := 1; i <= r.config.TCPServiceCount; i++ {
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulMeshService{
-				ConsulCommand:    r.config.consulCommand,
-				ID:               tcpServiceID(i, j),
-				Name:             tcpServiceName(i),
-				Protocol:         protocolTCP,
-				OnRegister:       r.registrationCh,
-				Server:           server,
-				ExternalServices: externalServices,
-				tracker:          newTracker(),
+				ConsulCommand:     r.config.consulCommand,
+				ID:                tcpServiceID(i, j),
+				Name:              tcpServiceName(i),
+				Protocol:          protocolTCP,
+				OnRegister:        r.registrationCh,
+				Server:            server,
+				ExternalUpstreams: upstreams,
+				tracker:           newTracker(),
 			})
 		}
 	}
