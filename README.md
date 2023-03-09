@@ -93,3 +93,11 @@ Flags:
 
 Use "consul-services [command] --help" for more information about a command.
 ```
+
+## Catastrophes
+
+If there are any bugs that you are hitting that are leaving processes in an orphaned state (this binary does a lot of child execs, and so does `consul connect` itself), then the easiest way to kill anything this may spin up and get your system back in a normal state (assuming you don't have any instances of `consul` or `envoy` running that you want to keep around) is (on a Mac):
+
+```bash
+killall consul; killall envoy; killall consul-services; rm ~/.consul-services.sock
+```
