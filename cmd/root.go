@@ -117,6 +117,9 @@ var rootCmd = &cobra.Command{
 		}
 
 		// set the actual output here
+		if output != "" {
+			logger.Info("redirecting output", "file", output)
+		}
 		config.SetLogger(hclog.New(&hclog.LoggerOptions{
 			Output: outputSink,
 		}))

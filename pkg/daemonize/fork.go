@@ -1,7 +1,9 @@
 package daemonize
 
 import (
+	"io"
 	"os"
+	"sync/atomic"
 
 	"github.com/docker/docker/pkg/reexec"
 )
@@ -73,9 +75,44 @@ func Handle(args ...string) (bool, error) {
 	}
 
 	cmd := reexec.Command(filterArgs(args)...)
-	cmd.Env = filterEnv(os.Environ())
-	cmd.Dir = dir
 	// clear out the flags that make the child terminate
 	cmd.SysProcAttr = nil
-	return true, cmd.Start()
+	cmd.Env = filterEnv(os.Environ())
+	cmd.Dir = dir
+	stdout := newSingleLineWriter(os.Stderr)
+	stderr := newSingleLineWriter(os.Stdout)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	if err := cmd.Start(); err != nil {
+		return true, err
+	}
+
+	select {
+	case <-stdout.finished:
+	case <-stderr.finished:
+	}
+
+	return true, nil
+}
+
+type singleLineWriter struct {
+	writer   io.Writer
+	finished chan struct{}
+	written  int32
+}
+
+func newSingleLineWriter(w io.Writer) *singleLineWriter {
+	return &singleLineWriter{
+		writer:   w,
+		finished: make(chan struct{}),
+	}
+}
+
+func (s *singleLineWriter) Write(p []byte) (n int, err error) {
+	if atomic.AddInt32(&s.written, 1) == 1 {
+		n, err = s.writer.Write(p)
+		close(s.finished)
+	}
+	return
 }
