@@ -1,10 +1,7 @@
 services:
   http: 3
-  tcp: 3
   external:
-    http: 3
-    tcp: 3
-duplicates: 3
+    http: 1
 run: true
 resources: example
 datacenters: [dc1, dc2]

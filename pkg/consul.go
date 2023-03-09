@@ -20,6 +20,9 @@ type ConsulAgent struct {
 	// Datacenter is the datacenter to register in
 	Datacenter string
 
+	// PrimaryDatacenter is the primary datacenter for the federated cluster
+	PrimaryDatacenter string
+
 	// Server used in registering information about the deployed consul instance
 	Server *server.Server
 
@@ -115,15 +118,17 @@ func (c *ConsulAgent) renderTemplate(template, name string) error {
 
 type configArgs struct {
 	*tracker
-	Datacenter string
+	PrimaryDatacenter string
+	Datacenter        string
 }
 
 func (c *ConsulAgent) executeTemplate(name string) ([]byte, error) {
 	var buffer bytes.Buffer
 
 	if err := getTemplate(name).Execute(&buffer, &configArgs{
-		tracker:    c.tracker,
-		Datacenter: c.Datacenter,
+		tracker:           c.tracker,
+		PrimaryDatacenter: c.PrimaryDatacenter,
+		Datacenter:        c.Datacenter,
 	}); err != nil {
 		return nil, err
 	}

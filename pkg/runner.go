@@ -43,6 +43,11 @@ func (r *Runner) Run(ctx context.Context) error {
 	agents := []*ConsulAgent{}
 	addresses := []string{}
 
+	meshGatewayServices := []*ConsulMeshGateway{}
+	externalServices := []*ConsulExternalService{}
+	meshServices := []*ConsulMeshService{}
+	resources := []interface{}{}
+
 	for _, dc := range r.config.Datacenters {
 		locale := locality{
 			Datacenter: dc,
@@ -51,10 +56,11 @@ func (r *Runner) Run(ctx context.Context) error {
 
 		if r.config.RunConsul {
 			consul := &ConsulAgent{
-				ConsulCommand: r.config.consulCommand,
-				Server:        controlServer,
-				Datacenter:    dc,
-				tracker:       newTracker(),
+				ConsulCommand:     r.config.consulCommand,
+				Server:            controlServer,
+				Datacenter:        dc,
+				PrimaryDatacenter: r.config.Datacenters[0],
+				tracker:           newTracker(),
 			}
 
 			if err := consul.Write(); err != nil {
@@ -85,25 +91,18 @@ func (r *Runner) Run(ctx context.Context) error {
 			locale.address = consul.address()
 		}
 
-		upstreams, externalServices := r.initializeExternalServices(locale, controlServer)
-		for i := range externalServices {
-			service := externalServices[i]
+		// register mesh gateway
+		meshGatewayServices = append(meshGatewayServices, &ConsulMeshGateway{
+			ConsulCommand: r.config.consulCommand,
+			Server:        controlServer,
+			locality:      locale,
+		})
 
-			group.Go(func() error {
-				return service.Run(ctx)
-			})
-		}
-		r.waitForNRegistrations(ctx, len(externalServices))
+		upstreams, external := r.initializeExternalServices(locale, controlServer)
+		externalServices = append(externalServices, external...)
 
-		meshServices := r.initializeMeshServices(locale, controlServer, upstreams)
-		for i := range meshServices {
-			service := meshServices[i]
-
-			group.Go(func() error {
-				return service.Run(ctx)
-			})
-		}
-		r.waitForNRegistrations(ctx, len(meshServices))
+		services := r.initializeMeshServices(locale, controlServer, upstreams)
+		meshServices = append(meshServices, services...)
 
 		if r.config.ResourceFolder != "" {
 			folder := r.config.ResourceFolder
@@ -129,16 +128,7 @@ func (r *Runner) Run(ctx context.Context) error {
 					return err
 				}
 
-				switch e := entry.(type) {
-				case *ConsulConfigEntry:
-					return e.Write(ctx)
-				case *ConsulGateway:
-					e.Server = controlServer
-
-					group.Go(func() error {
-						return e.Run(ctx)
-					})
-				}
+				resources = append(resources, entry)
 
 				return nil
 			}); err != nil {
@@ -152,9 +142,62 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	for _, agent := range agents {
+	// reverse the order of the join so that the first
+	// listed DC winds up being the primary
+	for i := len(agents) - 1; i >= 0; i-- {
+		agent := agents[i]
 		if err := agent.join(ctx, addresses); err != nil {
-			return err
+			select {
+			case <-ctx.Done():
+				return group.Wait()
+			default:
+				return err
+			}
+		}
+	}
+
+	// now register all of the stuff since we're federated
+
+	for i := range meshGatewayServices {
+		mesh := meshGatewayServices[i]
+		group.Go(func() error {
+			return mesh.Run(ctx)
+		})
+	}
+
+	for i := range externalServices {
+		service := externalServices[i]
+		group.Go(func() error {
+			return service.Run(ctx)
+		})
+	}
+	r.waitForNRegistrations(ctx, len(externalServices))
+
+	for i := range meshServices {
+		service := meshServices[i]
+		group.Go(func() error {
+			return service.Run(ctx)
+		})
+	}
+	r.waitForNRegistrations(ctx, len(meshServices))
+
+	for _, entry := range resources {
+		switch e := entry.(type) {
+		case *ConsulConfigEntry:
+			if err := e.Write(ctx); err != nil {
+				select {
+				case <-ctx.Done():
+					return group.Wait()
+				default:
+					return err
+				}
+			}
+		case *ConsulGateway:
+			e.Server = controlServer
+
+			group.Go(func() error {
+				return e.Run(ctx)
+			})
 		}
 	}
 

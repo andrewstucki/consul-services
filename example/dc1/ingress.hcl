@@ -7,6 +7,9 @@ Listeners = [
     Services = [{
       Name = "http-1"
       Hosts = ["*"]
+    },{
+      Name = "http-dc-2"
+      Hosts = ["dc2.consul.internal"]
     }]
   }
 ]

@@ -1,3 +1,4 @@
+primary_datacenter = "{{ .PrimaryDatacenter }}"
 datacenter = "{{ .Datacenter }}"
 addresses = {
   dns = "127.0.0.1"
