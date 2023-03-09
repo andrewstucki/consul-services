@@ -89,7 +89,7 @@ func parseFile(path string) (*file, error) {
 	return parsed, nil
 }
 
-func parseFileIntoEntry(command *ConsulCommand, definition string) (interface{}, error) {
+func parseFileIntoEntry(command *ConsulCommand, definition string, locality locality) (interface{}, error) {
 	file, err := parseFile(definition)
 	if err != nil {
 		return nil, err
@@ -99,6 +99,7 @@ func parseFileIntoEntry(command *ConsulCommand, definition string) (interface{},
 		ConsulCommand:  command,
 		DefinitionFile: definition,
 		tracker:        newTracker(),
+		locality:       locality,
 	}
 
 	if _, ok := knownGateways[file.Kind]; ok {

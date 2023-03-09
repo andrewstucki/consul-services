@@ -32,6 +32,7 @@ var (
 	socket                   string
 	output                   string
 	configFile               string
+	datacenters              []string
 	runConsul                bool
 	daemonizeRunner          bool
 )
@@ -45,6 +46,12 @@ func setCommandFlag(cmd *cobra.Command, flag string) {
 func setCommandFlagExtended(cmd *cobra.Command, viperFlag, cobraFlag string) {
 	if value := viper.GetString(viperFlag); value != "" {
 		cmd.Flags().Set(cobraFlag, value)
+	}
+}
+
+func setCommandFlagArray(cmd *cobra.Command, viperFlag, cobraFlag string) {
+	for _, viperValue := range viper.GetStringSlice(viperFlag) {
+		cmd.Flags().Set(cobraFlag, viperValue)
 	}
 }
 
@@ -75,6 +82,7 @@ var rootCmd = &cobra.Command{
 		setCommandFlag(cmd, "socket")
 		setCommandFlag(cmd, "run")
 
+		setCommandFlagArray(cmd, "datacenters", "datacenter")
 		setCommandFlagExtended(cmd, "services.tcp", "tcp")
 		setCommandFlagExtended(cmd, "services.http", "http")
 		setCommandFlagExtended(cmd, "services.external.tcp", "external-tcp")
@@ -98,6 +106,7 @@ var rootCmd = &cobra.Command{
 			ConsulBinary:             consulBinary,
 			Socket:                   socket,
 			RunConsul:                runConsul,
+			Datacenters:              datacenters,
 			Logger:                   logger,
 		}
 
@@ -182,6 +191,8 @@ func init() {
 	viper.BindPFlag("socket", rootCmd.PersistentFlags().Lookup("socket"))
 	rootCmd.Flags().BoolVar(&runConsul, "run", false, "Additionally run Consul binary in agent mode.")
 	viper.BindPFlag("run", rootCmd.Flags().Lookup("run"))
+	rootCmd.Flags().StringArrayVar(&datacenters, "datacenter", []string{"dc1"}, "Datacenters to deploy into.")
+	viper.BindPFlag("datacenters", rootCmd.Flags().Lookup("datacenter"))
 	rootCmd.PersistentFlags().StringVarP(&output, "output", "o", "", "Path to use for output rather than stdout.")
 	viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
 

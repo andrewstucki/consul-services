@@ -31,6 +31,9 @@ type ConsulExternalService struct {
 	servicePort int
 	// tracker holds any dynamic allocations
 	tracker *tracker
+
+	// locality identifies the datacenter/partition/namespace a service is deployed in
+	locality locality
 }
 
 // Run runs the Consul external service
@@ -58,9 +61,12 @@ func (c *ConsulExternalService) Run(ctx context.Context) error {
 
 	c.OnRegister <- struct{}{}
 	c.Server.Register(server.Service{
-		Kind:  "external",
-		Name:  c.ID,
-		Ports: []int{c.servicePort},
+		Datacenter: c.locality.Datacenter,
+		Partition:  c.locality.Partition,
+		Namespace:  c.locality.Namespace,
+		Kind:       "external",
+		Name:       c.ID,
+		Ports:      []int{c.servicePort},
 	})
 
 	return c.runService(ctx)
@@ -73,7 +79,7 @@ func (c *ConsulExternalService) renderService() error {
 func (c *ConsulExternalService) registerService(ctx context.Context) error {
 	c.Logger.Info("registering service", "id", c.ID)
 
-	client, err := api.NewClient(api.DefaultConfig())
+	client, err := c.locality.getClient()
 	if err != nil {
 		return err
 	}
@@ -88,7 +94,9 @@ func (c *ConsulExternalService) registerService(ctx context.Context) error {
 		return err
 	}
 
-	options := &api.WriteOptions{}
+	options := &api.WriteOptions{
+		Datacenter: c.locality.Datacenter,
+	}
 	if _, err := client.Catalog().Register(registration, options.WithContext(ctx)); err != nil {
 		return err
 	}
@@ -105,6 +113,8 @@ func (c *ConsulExternalService) writeServiceDefaults(ctx context.Context) error 
 func (c *ConsulExternalService) serviceDefaultsArgs() []string {
 	return []string{
 		"config", "write",
+		"-datacenter", c.locality.Datacenter,
+		"-http-addr", c.locality.getAddress(),
 		c.serviceDefaultsFile(),
 	}
 }

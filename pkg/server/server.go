@@ -18,6 +18,8 @@ type Server struct {
 	// SocketPath is the path to the control socket.
 	SocketPath string
 
+	// consuls contains the registered consul instances
+	consuls []Consul
 	// services contains the registered services
 	services []Service
 	// mutex guards the service registration
@@ -39,6 +41,7 @@ func (s *Server) Run(ctx context.Context) error {
 	router.HandleFunc("/shutdown", s.shutdown)
 	router.HandleFunc("/services", s.listServices)
 	router.HandleFunc("/services/{kind}/{name}", s.getService)
+	router.HandleFunc("/consul/{dc}", s.getConsul)
 
 	s.server = &http.Server{
 		Handler: router,
@@ -74,6 +77,14 @@ func (s *Server) Register(svc Service) {
 	defer s.mutex.Unlock()
 
 	s.services = append(s.services, svc)
+}
+
+// AddConsul adds the consul instance to the control server.
+func (s *Server) AddConsul(consul Consul) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.consuls = append(s.consuls, consul)
 }
 
 func (s *Server) shutdown(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +138,28 @@ func (s *Server) getService(w http.ResponseWriter, r *http.Request) {
 		if kind == service.Kind && name == service.Name {
 			w.Header().Set("content-type", "application/json")
 			encoder.Encode(service)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprintf(w, "not found")
+}
+
+func (s *Server) getConsul(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+
+	datacenter := params["dc"]
+
+	encoder := json.NewEncoder(w)
+
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	for _, consul := range s.consuls {
+		if datacenter == consul.Datacenter {
+			w.Header().Set("content-type", "application/json")
+			encoder.Encode(consul)
 			return
 		}
 	}

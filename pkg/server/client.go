@@ -86,6 +86,34 @@ func (c *Client) Get(kind, name string) (*Service, error) {
 	return service, nil
 }
 
+// GetConsul returns a controlled consul instance.
+func (c *Client) GetConsul(dc string) (*Consul, error) {
+	url, err := url.Parse(requestPath("/consul/" + dc))
+	if err != nil {
+		return nil, err
+	}
+
+	response, err := c.client.Get(url.String())
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf("code: %d, message: %q", response.StatusCode, string(body))
+	}
+
+	consul := &Consul{}
+	if err := json.Unmarshal(body, consul); err != nil {
+		return nil, err
+	}
+	return consul, nil
+}
+
 // List lists the controlled services.
 func (c *Client) List(kinds ...string) ([]Service, error) {
 	url, err := url.Parse(requestPath("/services"))

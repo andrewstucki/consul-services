@@ -34,6 +34,8 @@ type RunnerConfig struct {
 	Socket string
 	// RunConsul specifies whether a Consul agent in dev mode should also be run
 	RunConsul bool
+	// Datacenters specifies the list of datacenters to deploy resources in.
+	Datacenters []string
 	// Logger specifies the logger to use for output
 	Logger hclog.Logger
 
@@ -57,6 +59,14 @@ func (c *RunnerConfig) Validate() error {
 		return err
 	}
 
+	if err := c.validateDatacenters(); err != nil {
+		return err
+	}
+
+	if err := c.validateResourceFolder(); err != nil {
+		return err
+	}
+
 	return c.validateServiceCounts()
 }
 
@@ -66,6 +76,73 @@ func (c *RunnerConfig) validateConsul() error {
 		return err
 	}
 	c.consulCommand = consul
+	return nil
+}
+
+func (c *RunnerConfig) validateDatacenters() error {
+	if len(c.Datacenters) == 0 {
+		return errors.New("no datacenters specified")
+	}
+
+	seen := map[string]struct{}{}
+	for _, dc := range c.Datacenters {
+		if _, ok := seen[dc]; ok {
+			return fmt.Errorf("duplicate datacenter name specified: %q", dc)
+		}
+		seen[dc] = struct{}{}
+	}
+
+	return nil
+}
+
+func (c *RunnerConfig) validateResourceFolder() error {
+	if c.ResourceFolder == "" {
+		return nil
+	}
+
+	info, err := os.Stat(c.ResourceFolder)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errors.New("--resources must be a directory")
+	}
+
+	if len(c.Datacenters) == 1 {
+		return nil
+	}
+
+	// ensure we have a directory with subfolders aligning with
+	// the name of the DC we want them created in
+
+	f, err := os.Open(c.ResourceFolder)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	files, err := f.Readdir(0)
+	if err != nil {
+		return err
+	}
+
+	for _, dc := range c.Datacenters {
+		found := false
+		for _, file := range files {
+			if !file.IsDir() {
+				continue
+			}
+
+			if file.Name() == dc {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("multiple datacenters specified, but no folder named %q found in resource folder", dc)
+		}
+	}
+
 	return nil
 }
 

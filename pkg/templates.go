@@ -15,6 +15,7 @@ const (
 	protocolHTTP = "http"
 	protocolTCP  = "tcp"
 
+	agentTemplate           = "agent.hcl"
 	externalServiceTemplate = "external-service.json"
 	serviceTemplate         = "service.hcl"
 	serviceDefaultsTemplate = "service-defaults.hcl"

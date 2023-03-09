@@ -89,6 +89,7 @@ func (c *ConsulGateway) gatewayArgs() []string {
 		"-service", c.Name,
 		"-proxy-id", c.Name,
 		"-admin-bind", fmt.Sprintf("127.0.0.1:%d", c.adminPort),
+		"-http-addr", c.locality.getAddress(),
 	}
 
 	if len(c.tracker.ports) > 0 {

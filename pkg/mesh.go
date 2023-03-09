@@ -36,6 +36,9 @@ type ConsulMeshService struct {
 	servicePort int
 	// tracker holds any dynamic allocations
 	tracker *tracker
+
+	// locality identifies the datacenter/partition/namespace a service is deployed in
+	locality locality
 }
 
 // Run runs the Consul mesh service
@@ -66,9 +69,12 @@ func (c *ConsulMeshService) Run(ctx context.Context) error {
 
 	c.OnRegister <- struct{}{}
 	c.Server.Register(server.Service{
-		Kind:  "service",
-		Name:  c.ID,
-		Ports: []int{c.servicePort},
+		Datacenter: c.locality.Datacenter,
+		Partition:  c.locality.Partition,
+		Namespace:  c.locality.Namespace,
+		Kind:       "service",
+		Name:       c.ID,
+		Ports:      []int{c.servicePort},
 	})
 
 	group, ctx := errgroup.WithContext(ctx)
@@ -137,6 +143,9 @@ func (c *ConsulMeshService) runEnvoy(ctx context.Context) error {
 
 	return c.runConsulBinary(ctx, func(log string) {
 		c.Server.Register(server.Service{
+			Datacenter: c.locality.Datacenter,
+			Partition:  c.locality.Partition,
+			Namespace:  c.locality.Namespace,
 			Kind:       "connect-proxy",
 			Name:       c.ID + "-proxy",
 			AdminPort:  c.adminPort,
@@ -150,6 +159,8 @@ func (c *ConsulMeshService) runEnvoy(ctx context.Context) error {
 func (c *ConsulMeshService) serviceArgs() []string {
 	return []string{
 		"services", "register",
+		"-datacenter", c.locality.Datacenter,
+		"-http-addr", c.locality.getAddress(),
 		c.serviceFile(),
 	}
 }
@@ -157,6 +168,8 @@ func (c *ConsulMeshService) serviceArgs() []string {
 func (c *ConsulMeshService) serviceProxyArgs() []string {
 	return []string{
 		"services", "register",
+		"-datacenter", c.locality.Datacenter,
+		"-http-addr", c.locality.getAddress(),
 		c.serviceProxyFile(),
 	}
 }
@@ -164,6 +177,8 @@ func (c *ConsulMeshService) serviceProxyArgs() []string {
 func (c *ConsulMeshService) serviceDefaultsArgs() []string {
 	return []string{
 		"config", "write",
+		"-datacenter", c.locality.Datacenter,
+		"-http-addr", c.locality.getAddress(),
 		c.serviceDefaultsFile(),
 	}
 }
@@ -171,6 +186,7 @@ func (c *ConsulMeshService) serviceDefaultsArgs() []string {
 func (c *ConsulMeshService) sidecarArgs() []string {
 	return []string{
 		"connect", "envoy",
+		"-http-addr", c.locality.getAddress(),
 		"-sidecar-for", c.ID,
 		"-admin-bind", fmt.Sprintf("127.0.0.1:%d", c.adminPort),
 		"--", "-l", "trace",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -39,82 +40,121 @@ func (r *Runner) Run(ctx context.Context) error {
 		return controlServer.Run(ctx)
 	})
 
-	if r.config.RunConsul {
-		consul := &ConsulAgent{
-			ConsulCommand: r.config.consulCommand,
-		}
-		group.Go(func() error {
-			return consul.Run(ctx)
-		})
+	agents := []*ConsulAgent{}
+	addresses := []string{}
 
-		if err := consul.ready(ctx); err != nil {
-			select {
-			case <-ctx.Done():
-				return group.Wait()
-			default:
+	for _, dc := range r.config.Datacenters {
+		locale := locality{
+			Datacenter: dc,
+			// Add namespace/partition support later
+		}
+
+		if r.config.RunConsul {
+			consul := &ConsulAgent{
+				ConsulCommand: r.config.consulCommand,
+				Server:        controlServer,
+				Datacenter:    dc,
+				tracker:       newTracker(),
+			}
+
+			if err := consul.Write(); err != nil {
 				return err
 			}
-		}
-	}
 
-	upstreams, externalServices := r.initializeExternalServices(controlServer)
-	for i := range externalServices {
-		service := externalServices[i]
+			agents = append(agents, consul)
+			addresses = append(addresses, consul.wanAddress())
 
-		group.Go(func() error {
-			return service.Run(ctx)
-		})
-	}
-	r.waitForNRegistrations(ctx, len(externalServices))
+			group.Go(func() error {
+				return consul.Run(ctx)
+			})
 
-	meshServices := r.initializeMeshServices(controlServer, upstreams)
-	for i := range meshServices {
-		service := meshServices[i]
+			if err := consul.ready(ctx); err != nil {
+				select {
+				case <-ctx.Done():
+					return group.Wait()
+				default:
+					return err
+				}
+			}
 
-		group.Go(func() error {
-			return service.Run(ctx)
-		})
-	}
-	r.waitForNRegistrations(ctx, len(meshServices))
-
-	if r.config.ResourceFolder != "" {
-		if err := filepath.Walk(r.config.ResourceFolder, func(path string, info fs.FileInfo, err error) error {
+			client, err := consul.client()
 			if err != nil {
 				return err
 			}
+			locale.client = client
+			locale.address = consul.address()
+		}
 
-			if info.IsDir() {
+		upstreams, externalServices := r.initializeExternalServices(locale, controlServer)
+		for i := range externalServices {
+			service := externalServices[i]
+
+			group.Go(func() error {
+				return service.Run(ctx)
+			})
+		}
+		r.waitForNRegistrations(ctx, len(externalServices))
+
+		meshServices := r.initializeMeshServices(locale, controlServer, upstreams)
+		for i := range meshServices {
+			service := meshServices[i]
+
+			group.Go(func() error {
+				return service.Run(ctx)
+			})
+		}
+		r.waitForNRegistrations(ctx, len(meshServices))
+
+		if r.config.ResourceFolder != "" {
+			folder := r.config.ResourceFolder
+			if len(r.config.Datacenters) > 1 {
+				folder = path.Join(folder, dc)
+			}
+
+			if err := filepath.Walk(folder, func(path string, info fs.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+
+				if info.IsDir() {
+					return nil
+				}
+
+				if !strings.HasSuffix(info.Name(), ".hcl") {
+					return nil
+				}
+
+				entry, err := parseFileIntoEntry(r.config.consulCommand, path, locale)
+				if err != nil {
+					return err
+				}
+
+				switch e := entry.(type) {
+				case *ConsulConfigEntry:
+					return e.Write(ctx)
+				case *ConsulGateway:
+					e.Server = controlServer
+
+					group.Go(func() error {
+						return e.Run(ctx)
+					})
+				}
+
 				return nil
+			}); err != nil {
+				select {
+				case <-ctx.Done():
+					return group.Wait()
+				default:
+					return err
+				}
 			}
+		}
+	}
 
-			if !strings.HasSuffix(info.Name(), ".hcl") {
-				return nil
-			}
-
-			entry, err := parseFileIntoEntry(r.config.consulCommand, path)
-			if err != nil {
-				return err
-			}
-
-			switch e := entry.(type) {
-			case *ConsulConfigEntry:
-				return e.Write(ctx)
-			case *ConsulGateway:
-				e.Server = controlServer
-
-				group.Go(func() error {
-					return e.Run(ctx)
-				})
-			}
-
-			return nil
-		}); err != nil {
-			select {
-			case <-ctx.Done():
-				return group.Wait()
-			default:
-				return err
-			}
+	for _, agent := range agents {
+		if err := agent.join(ctx, addresses); err != nil {
+			return err
 		}
 	}
 
@@ -140,7 +180,7 @@ func (r *Runner) waitForNRegistrations(ctx context.Context, n int) {
 	}
 }
 
-func (r *Runner) initializeExternalServices(server *server.Server) ([]string, []*ConsulExternalService) {
+func (r *Runner) initializeExternalServices(locality locality, server *server.Server) ([]string, []*ConsulExternalService) {
 	upstreams := []string{}
 	services := []*ConsulExternalService{}
 
@@ -149,12 +189,13 @@ func (r *Runner) initializeExternalServices(server *server.Server) ([]string, []
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulExternalService{
 				ConsulCommand: r.config.consulCommand,
-				ID:            httpExternalServiceID(i, j),
+				ID:            httpExternalServiceID(locality, i, j),
 				Name:          httpExternalServiceName(i),
 				Protocol:      protocolHTTP,
 				OnRegister:    r.registrationCh,
 				Server:        server,
 				tracker:       newTracker(),
+				locality:      locality,
 			})
 		}
 	}
@@ -164,12 +205,13 @@ func (r *Runner) initializeExternalServices(server *server.Server) ([]string, []
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulExternalService{
 				ConsulCommand: r.config.consulCommand,
-				ID:            tcpExternalServiceID(i, j),
+				ID:            tcpExternalServiceID(locality, i, j),
 				Name:          tcpExternalServiceName(i),
 				Protocol:      protocolTCP,
 				OnRegister:    r.registrationCh,
 				Server:        server,
 				tracker:       newTracker(),
+				locality:      locality,
 			})
 		}
 	}
@@ -177,20 +219,21 @@ func (r *Runner) initializeExternalServices(server *server.Server) ([]string, []
 	return upstreams, services
 }
 
-func (r *Runner) initializeMeshServices(server *server.Server, upstreams []string) []*ConsulMeshService {
+func (r *Runner) initializeMeshServices(locality locality, server *server.Server, upstreams []string) []*ConsulMeshService {
 	services := []*ConsulMeshService{}
 
 	for i := 1; i <= r.config.HTTPServiceCount; i++ {
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulMeshService{
 				ConsulCommand:     r.config.consulCommand,
-				ID:                httpServiceID(i, j),
+				ID:                httpServiceID(locality, i, j),
 				Name:              httpServiceName(i),
 				Protocol:          protocolHTTP,
 				OnRegister:        r.registrationCh,
 				Server:            server,
 				ExternalUpstreams: upstreams,
 				tracker:           newTracker(),
+				locality:          locality,
 			})
 		}
 	}
@@ -199,13 +242,14 @@ func (r *Runner) initializeMeshServices(server *server.Server, upstreams []strin
 		for j := 1; j <= r.config.ServiceDuplicates; j++ {
 			services = append(services, &ConsulMeshService{
 				ConsulCommand:     r.config.consulCommand,
-				ID:                tcpServiceID(i, j),
+				ID:                tcpServiceID(locality, i, j),
 				Name:              tcpServiceName(i),
 				Protocol:          protocolTCP,
 				OnRegister:        r.registrationCh,
 				Server:            server,
 				ExternalUpstreams: upstreams,
 				tracker:           newTracker(),
+				locality:          locality,
 			})
 		}
 	}
@@ -213,34 +257,45 @@ func (r *Runner) initializeMeshServices(server *server.Server, upstreams []strin
 	return services
 }
 
-func httpServiceID(i, j int) string {
-	return fmt.Sprintf("http-%d-%d", i, j)
+func httpServiceID(locality locality, i, j int) string {
+	return fmt.Sprintf("http-%s-%d-%d", localitySuffix(locality), i, j)
 }
 
 func httpServiceName(i int) string {
 	return fmt.Sprintf("http-%d", i)
 }
 
-func httpExternalServiceID(i, j int) string {
-	return fmt.Sprintf("http-external-%d-%d", i, j)
+func httpExternalServiceID(locality locality, i, j int) string {
+	return fmt.Sprintf("http-external-%s-%d-%d", localitySuffix(locality), i, j)
 }
 
 func httpExternalServiceName(i int) string {
 	return fmt.Sprintf("http-external-%d", i)
 }
 
-func tcpServiceID(i, j int) string {
-	return fmt.Sprintf("tcp-%d-%d", i, j)
+func tcpServiceID(locality locality, i, j int) string {
+	return fmt.Sprintf("tcp-%s-%d-%d", localitySuffix(locality), i, j)
 }
 
 func tcpServiceName(i int) string {
 	return fmt.Sprintf("tcp-%d", i)
 }
 
-func tcpExternalServiceID(i, j int) string {
-	return fmt.Sprintf("tcp-external-%d-%d", i, j)
+func tcpExternalServiceID(locality locality, i, j int) string {
+	return fmt.Sprintf("tcp-external-%s-%d-%d", localitySuffix(locality), i, j)
 }
 
 func tcpExternalServiceName(i int) string {
 	return fmt.Sprintf("tcp-external-%d", i)
+}
+
+func localitySuffix(locality locality) string {
+	suffix := locality.Datacenter
+	if locality.Partition != "" {
+		suffix += "-" + locality.Partition
+	}
+	if locality.Namespace != "" {
+		suffix += "-" + locality.Namespace
+	}
+	return suffix
 }

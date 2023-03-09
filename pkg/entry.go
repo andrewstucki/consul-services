@@ -17,6 +17,8 @@ type ConsulConfigEntry struct {
 
 	// tracker holds the allocated information for the entry
 	tracker *tracker
+	// locality identifies the datacenter/partition/namespace an entry is written to
+	locality locality
 }
 
 func (c *ConsulConfigEntry) renderedFile() string {
@@ -32,6 +34,8 @@ func (c *ConsulConfigEntry) Write(ctx context.Context) error {
 
 	return c.runConsulBinary(ctx, nil, []string{
 		"config", "write",
+		"-datacenter", c.locality.Datacenter,
+		"-http-addr", c.locality.getAddress(),
 		c.renderedFile(),
 	})
 }
