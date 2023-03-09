@@ -6,9 +6,10 @@
 - [x] Add a log follower so we can look at logs of daemonized services.
 - [x] Add an admin opener where we can immediately open the admin interface pages for any proxies.
 - [x] Add the ability to spin up external services easily that can be routed through the mesh via terminating gateways (likely will need a paired trigger to act as a request proxy).
-- [ ] Add the ability to spin up resources in multiple consul dcs and have the dcs be connected via mesh gateways.
+- [x] Add the ability to spin up resources in multiple consul dcs and have the dcs be connected via mesh gateways.
 - [ ] Add the ability to specify the templates used for running target services.
 - [ ] Add the ability to set timeout parameters on how services respond to requests.
+- [ ] Add the ability to override dynamically allocated things like ports.
 
 # Investigate
 
