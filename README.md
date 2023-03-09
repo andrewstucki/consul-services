@@ -7,9 +7,7 @@ This binary helps run testing services on the Consul Service mesh.
 Boot up the services in the background:
 
 ```bash
-consul-services -c example/consul-services.yaml -d
-# or
-consul-services --run -r example --http 3 --external-http 1 -D 3 -d
+consul-services -c example/multi-dc.yaml -d
 ```
 
 Test the API gateway:
@@ -22,14 +20,16 @@ curl localhost:$GATEWAY_HTTP_PORT -H "host: test.consul.local"
 Test the ingress gateway:
 
 ```bash
-INGRESS_HTTP_PORT=$(consul-services get ingress -k ingress -f '.Ports[0]')
+INGRESS_HTTP_PORT=$(consul-services get ingress -k ingress -f '.Ports[1]')
 curl localhost:$INGRESS_HTTP_PORT
+# and cross-dc mesh routing
+curl localhost:$INGRESS_HTTP_PORT -H "host: dc2.consul.internal"
 ```
 
 Test connectivity through the terminating gateway:
 
 ```bash
-consul-services check http-1-1 http-external-1
+consul-services check http-dc1-1-1 http-external-1
 ```
 
 Open up the admin interface of the API gateway:
@@ -48,6 +48,14 @@ List all services:
 
 ```bash
 consul-services list -a
+```
+
+Open up the Consul UI:
+
+```bash
+consul-services ui
+# and for the second datacenter
+consul-services ui -d dc2
 ```
 
 Stop the services
@@ -75,21 +83,23 @@ Available Commands:
   list        Lists the services currently running.
   logs        Read logs from a deployed service.
   stop        Stops a daemonized run
+  ui          Opens up the Consul UI
 
 Flags:
-  -c, --config string       Path to configuration file. (default ".consul-services.yaml")
-      --consul string       Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.
-  -d, --daemon              Daemonize the process.
-  -D, --duplicates int      Number of duplicate services to register on the mesh. (default 1)
-      --external-http int   Number of HTTP-based external services to register on the mesh.
-      --external-tcp int    Number of TCP-based external services to register on the mesh.
-  -h, --help                help for consul-services
-      --http int            Number of HTTP-based services to register on the mesh. (default 1)
-  -o, --output string       Path to use for output rather than stdout.
-  -r, --resources string    Path to a folder containing extra configuration entries to write.
-      --run                 Additionally run Consul binary in agent mode.
-  -s, --socket string       Path to unix socket for control server. (default "$HOME/.consul-services.sock")
-      --tcp int             Number of TCP-based services to register on the mesh.
+  -c, --config string            Path to configuration file. (default ".consul-services.yaml")
+      --consul string            Consul binary to use for registration, defaults to a binary found in the current folder and then the PATH.
+  -d, --daemon                   Daemonize the process.
+      --datacenter stringArray   Datacenters to deploy into. (default [dc1])
+  -D, --duplicates int           Number of duplicate services to register on the mesh. (default 1)
+      --external-http int        Number of HTTP-based external services to register on the mesh.
+      --external-tcp int         Number of TCP-based external services to register on the mesh.
+  -h, --help                     help for consul-services
+      --http int                 Number of HTTP-based services to register on the mesh. (default 1)
+  -o, --output string            Path to use for output rather than stdout.
+  -r, --resources string         Path to a folder containing extra configuration entries to write.
+      --run                      Additionally run Consul binary in agent mode.
+  -s, --socket string            Path to unix socket for control server. (default "$HOME/.consul-services.sock")
+      --tcp int                  Number of TCP-based services to register on the mesh.
 
 Use "consul-services [command] --help" for more information about a command.
 ```

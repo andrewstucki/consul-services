@@ -3,5 +3,5 @@ services:
   external:
     http: 1
 run: true
-resources: example
+resources: example/multi-dc
 datacenters: [dc1, dc2]

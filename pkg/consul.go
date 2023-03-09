@@ -57,6 +57,11 @@ func (c *ConsulAgent) join(ctx context.Context, addresses []string) error {
 		}
 		filtered = append(filtered, address)
 	}
+
+	if len(filtered) == 0 {
+		return nil
+	}
+
 	return c.runConsulBinary(ctx, nil, append([]string{
 		"join",
 		"-http-addr", c.address(),
