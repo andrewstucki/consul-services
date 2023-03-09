@@ -25,6 +25,8 @@ type ConsulMeshService struct {
 	OnRegister chan struct{}
 	// Server is used for service registration
 	Server *server.Server
+	// ExternalServices are the external services to add upstreams for
+	ExternalServices []*ConsulExternalService
 
 	// adminPort is the port allocated for envoy's admin interface
 	adminPort int
@@ -101,19 +103,19 @@ func (c *ConsulMeshService) allocatePorts() error {
 }
 
 func (c *ConsulMeshService) registerService(ctx context.Context) error {
-	c.Logger.Info("registering service")
+	c.Logger.Info("registering service", "id", c.ID)
 
 	return c.runConsulBinary(ctx, nil, c.serviceArgs())
 }
 
 func (c *ConsulMeshService) registerServiceProxy(ctx context.Context) error {
-	c.Logger.Info("registering sidecar proxy")
+	c.Logger.Info("registering sidecar proxy", "id", c.ID)
 
 	return c.runConsulBinary(ctx, nil, c.serviceProxyArgs())
 }
 
 func (c *ConsulMeshService) writeServiceDefaults(ctx context.Context) error {
-	c.Logger.Info("writing service defaults")
+	c.Logger.Info("writing service defaults", "id", c.ID)
 
 	return c.runConsulBinary(ctx, nil, c.serviceDefaultsArgs())
 }
@@ -211,12 +213,13 @@ func (c *ConsulMeshService) executeTemplate(name string) ([]byte, error) {
 	var buffer bytes.Buffer
 
 	if err := getTemplate(name).Execute(&buffer, &templateArgs{
-		tracker:     c.tracker,
-		ID:          c.ID,
-		Name:        c.Name,
-		Protocol:    c.Protocol,
-		ServicePort: c.servicePort,
-		ProxyPort:   c.proxyPort,
+		tracker:           c.tracker,
+		ID:                c.ID,
+		Name:              c.Name,
+		Protocol:          c.Protocol,
+		ServicePort:       c.servicePort,
+		ProxyPort:         c.proxyPort,
+		ExternalUpstreams: c.ExternalServices,
 	}); err != nil {
 		return nil, err
 	}

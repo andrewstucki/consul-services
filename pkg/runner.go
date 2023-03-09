@@ -57,60 +57,25 @@ func (r *Runner) Run(ctx context.Context) error {
 		}
 	}
 
-	services := []*ConsulMeshService{}
-
-	for i := 1; i <= r.config.HTTPServiceCount; i++ {
-		for j := 1; j <= r.config.ServiceDuplicates; j++ {
-			services = append(services, &ConsulMeshService{
-				ConsulCommand: r.config.consulCommand,
-				ID:            httpServiceID(i, j),
-				Name:          httpServiceName(i),
-				Protocol:      protocolHTTP,
-				OnRegister:    r.registrationCh,
-				Server:        controlServer,
-				tracker:       newTracker(),
-			})
-		}
-	}
-
-	for i := 1; i <= r.config.TCPServiceCount; i++ {
-		for j := 1; j <= r.config.ServiceDuplicates; j++ {
-			services = append(services, &ConsulMeshService{
-				ConsulCommand: r.config.consulCommand,
-				ID:            tcpServiceID(i, j),
-				Name:          tcpServiceName(i),
-				Protocol:      protocolTCP,
-				OnRegister:    r.registrationCh,
-				Server:        controlServer,
-				tracker:       newTracker(),
-			})
-		}
-	}
-
-	for i := range services {
-		service := services[i]
+	externalServices := r.initializeExternalServices(controlServer)
+	for i := range externalServices {
+		service := externalServices[i]
 
 		group.Go(func() error {
 			return service.Run(ctx)
 		})
 	}
+	r.waitForNRegistrations(ctx, len(externalServices))
 
-	serviceCount := len(services)
+	meshServices := r.initializeMeshServices(controlServer, externalServices)
+	for i := range meshServices {
+		service := meshServices[i]
 
-REGISTRATION_LOOP:
-	for {
-		select {
-		case <-ctx.Done():
-			// just let the rest of the cancelation
-			// code handle the below blocks
-			break REGISTRATION_LOOP
-		case <-r.registrationCh:
-			serviceCount--
-			if serviceCount == 0 {
-				break REGISTRATION_LOOP
-			}
-		}
+		group.Go(func() error {
+			return service.Run(ctx)
+		})
 	}
+	r.waitForNRegistrations(ctx, len(meshServices))
 
 	if r.config.ResourceFolder != "" {
 		if err := filepath.Walk(r.config.ResourceFolder, func(path string, info fs.FileInfo, err error) error {
@@ -156,6 +121,95 @@ REGISTRATION_LOOP:
 	return group.Wait()
 }
 
+func (r *Runner) waitForNRegistrations(ctx context.Context, n int) {
+	if n <= 0 {
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			// just let the rest of the cancellation fall through
+			return
+		case <-r.registrationCh:
+			n--
+			if n == 0 {
+				return
+			}
+		}
+	}
+}
+
+func (r *Runner) initializeExternalServices(server *server.Server) []*ConsulExternalService {
+	services := []*ConsulExternalService{}
+
+	for i := 1; i <= r.config.ExternalHTTPServiceCount; i++ {
+		for j := 1; j <= r.config.ServiceDuplicates; j++ {
+			services = append(services, &ConsulExternalService{
+				ConsulCommand: r.config.consulCommand,
+				ID:            httpExternalServiceID(i, j),
+				Name:          httpExternalServiceName(i),
+				Protocol:      protocolHTTP,
+				OnRegister:    r.registrationCh,
+				Server:        server,
+				tracker:       newTracker(),
+			})
+		}
+	}
+
+	for i := 1; i <= r.config.ExternalTCPServiceCount; i++ {
+		for j := 1; j <= r.config.ServiceDuplicates; j++ {
+			services = append(services, &ConsulExternalService{
+				ConsulCommand: r.config.consulCommand,
+				ID:            tcpExternalServiceID(i, j),
+				Name:          tcpExternalServiceName(i),
+				Protocol:      protocolTCP,
+				OnRegister:    r.registrationCh,
+				Server:        server,
+				tracker:       newTracker(),
+			})
+		}
+	}
+
+	return services
+}
+
+func (r *Runner) initializeMeshServices(server *server.Server, externalServices []*ConsulExternalService) []*ConsulMeshService {
+	services := []*ConsulMeshService{}
+
+	for i := 1; i <= r.config.HTTPServiceCount; i++ {
+		for j := 1; j <= r.config.ServiceDuplicates; j++ {
+			services = append(services, &ConsulMeshService{
+				ConsulCommand:    r.config.consulCommand,
+				ID:               httpServiceID(i, j),
+				Name:             httpServiceName(i),
+				Protocol:         protocolHTTP,
+				OnRegister:       r.registrationCh,
+				Server:           server,
+				ExternalServices: externalServices,
+				tracker:          newTracker(),
+			})
+		}
+	}
+
+	for i := 1; i <= r.config.TCPServiceCount; i++ {
+		for j := 1; j <= r.config.ServiceDuplicates; j++ {
+			services = append(services, &ConsulMeshService{
+				ConsulCommand:    r.config.consulCommand,
+				ID:               tcpServiceID(i, j),
+				Name:             tcpServiceName(i),
+				Protocol:         protocolTCP,
+				OnRegister:       r.registrationCh,
+				Server:           server,
+				ExternalServices: externalServices,
+				tracker:          newTracker(),
+			})
+		}
+	}
+
+	return services
+}
+
 func httpServiceID(i, j int) string {
 	return fmt.Sprintf("http-%d-%d", i, j)
 }
@@ -164,10 +218,26 @@ func httpServiceName(i int) string {
 	return fmt.Sprintf("http-%d", i)
 }
 
+func httpExternalServiceID(i, j int) string {
+	return fmt.Sprintf("http-external-%d-%d", i, j)
+}
+
+func httpExternalServiceName(i int) string {
+	return fmt.Sprintf("http-external-%d", i)
+}
+
 func tcpServiceID(i, j int) string {
 	return fmt.Sprintf("tcp-%d-%d", i, j)
 }
 
 func tcpServiceName(i int) string {
 	return fmt.Sprintf("tcp-%d", i)
+}
+
+func tcpExternalServiceID(i, j int) string {
+	return fmt.Sprintf("tcp-external-%d-%d", i, j)
+}
+
+func tcpExternalServiceName(i int) string {
+	return fmt.Sprintf("tcp-external-%d", i)
 }

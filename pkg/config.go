@@ -17,8 +17,12 @@ const (
 type RunnerConfig struct {
 	// TCPServiceCount specifies the number of TCP-based services to register on the mesh.
 	TCPServiceCount int
-	// HTTPServiceCount specifies the number of TCP-based services to register on the mesh.
+	// HTTPServiceCount specifies the number of HTTP-based services to register on the mesh.
 	HTTPServiceCount int
+	// ExternalTCPServiceCount specifies the number of external TCP-based services to register on the mesh.
+	ExternalTCPServiceCount int
+	// ExternalHTTPServiceCount specifies the number of external HTTP-based services to register on the mesh.
+	ExternalHTTPServiceCount int
 	// ServiceDuplicates is the amount of times a service should be duplicated (i.e. have the same
 	// service name, but different ids)
 	ServiceDuplicates int

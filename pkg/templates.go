@@ -15,6 +15,7 @@ const (
 	protocolHTTP = "http"
 	protocolTCP  = "tcp"
 
+	externalServiceTemplate = "external-service.json"
 	serviceTemplate         = "service.hcl"
 	serviceDefaultsTemplate = "service-defaults.hcl"
 	serviceProxyTemplate    = "service-proxy.hcl"
@@ -33,6 +34,8 @@ type templateArgs struct {
 	ServicePort int
 	// the protocol to use
 	Protocol string
+	// external upstreams to add
+	ExternalUpstreams []*ConsulExternalService
 }
 
 var (

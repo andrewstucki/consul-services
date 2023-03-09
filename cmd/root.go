@@ -22,21 +22,29 @@ const (
 var (
 	defaultUnixSocket string
 
-	tcpServiceCount       int
-	httpServiceCount      int
-	duplicateServiceCount int
-	resourceFolder        string
-	consulBinary          string
-	socket                string
-	output                string
-	configFile            string
-	runConsul             bool
-	daemonizeRunner       bool
+	tcpServiceCount          int
+	httpServiceCount         int
+	httpExternalServiceCount int
+	tcpExternalServiceCount  int
+	duplicateServiceCount    int
+	resourceFolder           string
+	consulBinary             string
+	socket                   string
+	output                   string
+	configFile               string
+	runConsul                bool
+	daemonizeRunner          bool
 )
 
 func setCommandFlag(cmd *cobra.Command, flag string) {
 	if value := viper.GetString(flag); value != "" {
 		cmd.Flags().Set(flag, value)
+	}
+}
+
+func setCommandFlagExtended(cmd *cobra.Command, viperFlag, cobraFlag string) {
+	if value := viper.GetString(viperFlag); value != "" {
+		cmd.Flags().Set(cobraFlag, value)
 	}
 }
 
@@ -61,13 +69,16 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		setCommandFlag(cmd, "tcp")
-		setCommandFlag(cmd, "http")
 		setCommandFlag(cmd, "duplicates")
 		setCommandFlag(cmd, "resources")
 		setCommandFlag(cmd, "consul")
 		setCommandFlag(cmd, "socket")
 		setCommandFlag(cmd, "run")
+
+		setCommandFlagExtended(cmd, "services.tcp", "tcp")
+		setCommandFlagExtended(cmd, "services.http", "http")
+		setCommandFlagExtended(cmd, "services.external.tcp", "external-tcp")
+		setCommandFlagExtended(cmd, "services.external.http", "external-http")
 
 		return nil
 	},
@@ -78,14 +89,16 @@ var rootCmd = &cobra.Command{
 		logger := createLogger()
 
 		config := pkg.RunnerConfig{
-			TCPServiceCount:   tcpServiceCount,
-			HTTPServiceCount:  httpServiceCount,
-			ServiceDuplicates: duplicateServiceCount,
-			ResourceFolder:    resourceFolder,
-			ConsulBinary:      consulBinary,
-			Socket:            socket,
-			RunConsul:         runConsul,
-			Logger:            logger,
+			TCPServiceCount:          tcpServiceCount,
+			HTTPServiceCount:         httpServiceCount,
+			ExternalTCPServiceCount:  tcpExternalServiceCount,
+			ExternalHTTPServiceCount: httpExternalServiceCount,
+			ServiceDuplicates:        duplicateServiceCount,
+			ResourceFolder:           resourceFolder,
+			ConsulBinary:             consulBinary,
+			Socket:                   socket,
+			RunConsul:                runConsul,
+			Logger:                   logger,
 		}
 
 		if err := config.Validate(); err != nil {
@@ -151,10 +164,14 @@ func init() {
 		defaultUnixSocket = path.Join(home, ".consul-services.sock")
 	}
 
-	rootCmd.Flags().IntVar(&tcpServiceCount, "tcp", 1, "Number of TCP-based services to register on the mesh.")
-	viper.BindPFlag("tcp", rootCmd.Flags().Lookup("tcp"))
+	rootCmd.Flags().IntVar(&tcpServiceCount, "tcp", 0, "Number of TCP-based services to register on the mesh.")
+	viper.BindPFlag("services.tcp", rootCmd.Flags().Lookup("tcp"))
 	rootCmd.Flags().IntVar(&httpServiceCount, "http", 1, "Number of HTTP-based services to register on the mesh.")
-	viper.BindPFlag("http", rootCmd.Flags().Lookup("http"))
+	viper.BindPFlag("services.http", rootCmd.Flags().Lookup("http"))
+	rootCmd.Flags().IntVar(&httpExternalServiceCount, "external-http", 0, "Number of HTTP-based external services to register on the mesh.")
+	viper.BindPFlag("services.external.http", rootCmd.Flags().Lookup("external-http"))
+	rootCmd.Flags().IntVar(&tcpExternalServiceCount, "external-tcp", 0, "Number of TCP-based external services to register on the mesh.")
+	viper.BindPFlag("services.external.tcp", rootCmd.Flags().Lookup("external-tcp"))
 	rootCmd.Flags().IntVarP(&duplicateServiceCount, "duplicates", "D", 1, "Number of duplicate services to register on the mesh.")
 	viper.BindPFlag("duplicates", rootCmd.Flags().Lookup("duplicates"))
 	rootCmd.Flags().StringVarP(&resourceFolder, "resources", "r", "", "Path to a folder containing extra configuration entries to write.")

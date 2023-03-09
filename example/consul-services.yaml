@@ -1,5 +1,7 @@
-tcp: 3
-http: 3
+services:
+  http: 3
+  external:
+    http: 1
 duplicates: 3
 run: true
 resources: example
