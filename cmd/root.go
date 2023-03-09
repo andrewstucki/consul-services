@@ -74,17 +74,6 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := hclog.Default()
 
-		outputSink := os.Stdout
-		if output != "" {
-			sink, err := os.Create(output)
-			if err != nil {
-				logger.Error("error opening up output sink", "err", err)
-				os.Exit(1)
-			}
-			defer sink.Close()
-			outputSink = sink
-		}
-
 		retcode := 0
 		defer func() { os.Exit(retcode) }()
 
@@ -118,11 +107,19 @@ var rootCmd = &cobra.Command{
 
 		// set the actual output here
 		if output != "" {
+			sink, err := os.Create(output)
+			if err != nil {
+				logger.Error("error opening up output sink", "err", err)
+				os.Exit(1)
+			}
+			defer sink.Close()
+
 			logger.Info("redirecting output", "file", output)
+
+			config.SetLogger(hclog.New(&hclog.LoggerOptions{
+				Output: sink,
+			}))
 		}
-		config.SetLogger(hclog.New(&hclog.LoggerOptions{
-			Output: outputSink,
-		}))
 
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer cancel()
