@@ -5,7 +5,6 @@ import (
 
 	"github.com/andrewstucki/consul-services/pkg/server"
 	"github.com/andrewstucki/consul-services/pkg/tables"
-	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +24,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Lists the services currently running.",
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := hclog.Default()
+		logger := createLogger()
 
 		filteredKinds := []string{}
 		if !allKinds {

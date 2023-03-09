@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/docker/docker v23.0.1+incompatible
+	github.com/fatih/color v1.13.0
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/consul/api v1.20.0
 	github.com/hashicorp/go-hclog v1.4.0
@@ -21,7 +22,6 @@ require (
 	github.com/agext/levenshtein v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/armon/go-metrics v0.4.0 // indirect
-	github.com/fatih/color v1.13.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect

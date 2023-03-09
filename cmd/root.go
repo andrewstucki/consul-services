@@ -72,10 +72,10 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := hclog.Default()
-
 		retcode := 0
 		defer func() { os.Exit(retcode) }()
+
+		logger := createLogger()
 
 		config := pkg.RunnerConfig{
 			TCPServiceCount:   tcpServiceCount,

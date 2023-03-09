@@ -6,7 +6,6 @@ import (
 
 	"github.com/andrewstucki/consul-services/pkg/server"
 	"github.com/andrewstucki/consul-services/pkg/tables"
-	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/util/jsonpath"
 )
@@ -25,7 +24,7 @@ var getCmd = &cobra.Command{
 	Args:  cobra.MatchAll(cobra.ExactArgs(1)),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		logger := hclog.Default()
+		logger := createLogger()
 
 		client := server.NewClient(socket)
 		service, err := client.Get(kind, name)

@@ -7,7 +7,6 @@ import (
 	"runtime"
 
 	"github.com/andrewstucki/consul-services/pkg/server"
-	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +17,7 @@ var adminCmd = &cobra.Command{
 	Short: "Opens the envoy admin panel for a given service.",
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		logger := hclog.Default()
+		logger := createLogger()
 
 		client := server.NewClient(socket)
 		service, err := client.Get(kind, name)

@@ -18,7 +18,21 @@ func PrintServices(w io.Writer, services []server.Service) {
 
 	table := tablewriter.NewWriter(w)
 	table.SetHeader([]string{"Kind", "Name", "Admin Port", "Ports"})
-	table.SetRowLine(true)
+	table.SetHeaderColor(
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlueColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlueColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlueColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlueColor},
+	)
+	table.SetColumnColor(
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiGreenColor},
+		tablewriter.Colors{},
+		tablewriter.Colors{},
+		tablewriter.Colors{},
+	)
+	table.SetAutoMergeCells(true)
+	table.SetRowLine(false)
+	table.SetBorder(false)
 	table.AppendBulk(serviceTable)
 
 	table.Render()
