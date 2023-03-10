@@ -1,6 +1,6 @@
 # Features
 
-- [ ] Add a "report" command that dumps out the files used in the current run, with an optional `--script` output to turn everything into one giant shell script.
+- [x] Add a "report" command that dumps out the files used in the current run, with an optional `--script` output to turn everything into one giant shell script.
 - [x] Allow the service runs to be daemonized similar to a `docker compose up -d`.
 - [x] With the above, add a teardown command like `docker compose down`.
 - [x] Add a log follower so we can look at logs of daemonized services.
