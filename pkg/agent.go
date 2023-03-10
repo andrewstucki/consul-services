@@ -5,10 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path"
 
+	"github.com/andrewstucki/consul-services/pkg/commands"
 	"github.com/andrewstucki/consul-services/pkg/server"
+	"github.com/andrewstucki/consul-services/pkg/vfs"
 	"github.com/cenkalti/backoff"
 	"github.com/hashicorp/consul/api"
 )
@@ -37,16 +38,17 @@ func (c *ConsulAgent) Write() error {
 
 // Run runs the Consul agent
 func (c *ConsulAgent) Run(ctx context.Context) error {
-	c.Server.AddConsul(server.Consul{
-		Datacenter: c.Datacenter,
-		Ports:      c.tracker.ports,
-		NamedPorts: c.tracker.namedPorts,
-	})
-
-	return c.runConsulBinary(ctx, nil, []string{
-		"agent", "-dev",
-		"-config-file", c.configFile(),
-	})
+	return c.runConsulBinary(ctx, func(log string) {
+		c.Server.AddConsul(server.Consul{
+			Datacenter: c.Datacenter,
+			Ports:      c.tracker.ports,
+			NamedPorts: c.tracker.namedPorts,
+			Logs:       log,
+			Config:     c.configFile(),
+			Address:    c.address(),
+			WanAddress: c.wanAddress(),
+		})
+	}, commands.AgentRunArgs(vfs.PathFor(c.configFile())))
 }
 
 func (c *ConsulAgent) join(ctx context.Context, addresses []string) error {
@@ -62,11 +64,7 @@ func (c *ConsulAgent) join(ctx context.Context, addresses []string) error {
 		return nil
 	}
 
-	return c.runConsulBinary(ctx, nil, append([]string{
-		"join",
-		"-http-addr", c.address(),
-		"-wan",
-	}, filtered...))
+	return c.runConsulBinary(ctx, nil, commands.AgentJoinArgs(c.address(), filtered))
 }
 
 func (c *ConsulAgent) writeConfig() error {
@@ -74,7 +72,7 @@ func (c *ConsulAgent) writeConfig() error {
 }
 
 func (c *ConsulAgent) configFile() string {
-	return path.Join(c.Folder, fmt.Sprintf("datacenter-%s.hcl", c.Datacenter))
+	return path.Join(c.Datacenter, "consul", fmt.Sprintf("config.hcl"))
 }
 
 func (c *ConsulAgent) ready(ctx context.Context) error {
@@ -118,7 +116,7 @@ func (c *ConsulAgent) renderTemplate(template, name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(name, rendered, 0600)
+	return vfs.WriteFile(name, rendered, 0600)
 }
 
 type configArgs struct {

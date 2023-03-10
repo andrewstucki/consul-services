@@ -16,7 +16,7 @@ func createLogger() hclog.Logger {
 		Color:                hclog.ForceColor,
 		ColorHeaderAndFields: true,
 		DisableTime:          true,
-		Level:                hclog.Info,
+		Level:                hclog.Debug,
 		Output:               os.Stderr,
 	})
 }

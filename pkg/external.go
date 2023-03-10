@@ -5,10 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 
+	"github.com/andrewstucki/consul-services/pkg/commands"
 	"github.com/andrewstucki/consul-services/pkg/server"
+	"github.com/andrewstucki/consul-services/pkg/vfs"
 	"github.com/hashicorp/consul/api"
 )
 
@@ -61,12 +62,16 @@ func (c *ConsulExternalService) Run(ctx context.Context) error {
 
 	c.OnRegister <- struct{}{}
 	c.Server.Register(server.Service{
-		Datacenter: c.locality.Datacenter,
-		Partition:  c.locality.Partition,
-		Namespace:  c.locality.Namespace,
-		Kind:       "external",
-		Name:       c.ID,
-		Ports:      []int{c.servicePort},
+		Datacenter:              c.locality.Datacenter,
+		Partition:               c.locality.Partition,
+		Namespace:               c.locality.Namespace,
+		Kind:                    "external",
+		Name:                    c.ID,
+		Ports:                   []int{c.servicePort},
+		ServiceDefaultsFile:     c.serviceDefaultsFile(),
+		ServiceRegistrationFile: c.serviceFile(),
+		Protocol:                c.Protocol,
+		ConsulAddress:           c.locality.getAddress(),
 	})
 
 	return c.runService(ctx)
@@ -84,7 +89,7 @@ func (c *ConsulExternalService) registerService(ctx context.Context) error {
 		return err
 	}
 
-	data, err := os.ReadFile(c.serviceFile())
+	data, err := vfs.ReadFile(c.serviceFile())
 	if err != nil {
 		return err
 	}
@@ -107,24 +112,19 @@ func (c *ConsulExternalService) registerService(ctx context.Context) error {
 func (c *ConsulExternalService) writeServiceDefaults(ctx context.Context) error {
 	c.Logger.Info("writing service defaults", "id", c.ID)
 
-	return c.runConsulBinary(ctx, nil, c.serviceDefaultsArgs())
-}
-
-func (c *ConsulExternalService) serviceDefaultsArgs() []string {
-	return []string{
-		"config", "write",
-		"-datacenter", c.locality.Datacenter,
-		"-http-addr", c.locality.getAddress(),
-		c.serviceDefaultsFile(),
-	}
+	return c.runConsulBinary(ctx, nil, commands.WriteConfigArgs(
+		c.locality.Datacenter,
+		c.locality.getAddress(),
+		vfs.PathFor(c.serviceDefaultsFile()),
+	))
 }
 
 func (c *ConsulExternalService) serviceFile() string {
-	return path.Join(c.Folder, fmt.Sprintf("service-%s.json", c.ID))
+	return path.Join(c.locality.Datacenter, fmt.Sprintf("external-service-%s.json", c.ID))
 }
 
 func (c *ConsulExternalService) serviceDefaultsFile() string {
-	return path.Join(c.Folder, fmt.Sprintf("service-defaults-%s.hcl", c.ID))
+	return path.Join(c.locality.Datacenter, fmt.Sprintf("external-service-defaults-%s.hcl", c.ID))
 }
 
 func (c *ConsulExternalService) renderServiceDefaults() error {
@@ -136,7 +136,7 @@ func (c *ConsulExternalService) renderTemplate(template, name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(name, rendered, 0600)
+	return vfs.WriteFile(name, rendered, 0600)
 }
 
 func (c *ConsulExternalService) executeTemplate(name string) ([]byte, error) {

@@ -28,6 +28,8 @@ func NewRunner(config RunnerConfig) *Runner {
 
 // Run runs the desired test services.
 func (r *Runner) Run(ctx context.Context) error {
+	r.config.Logger.Info("starting runtime")
+
 	group, ctx := errgroup.WithContext(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -35,7 +37,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	// we want to register all of our services
 	// with the control server so we can return
 	// information about them
-	controlServer := server.New(r.config.Socket)
+	controlServer := server.New(r.config.Logger, r.config.Socket, r.config.Datacenters)
 	group.Go(func() error {
 		return controlServer.Run(ctx)
 	})
@@ -123,7 +125,7 @@ func (r *Runner) Run(ctx context.Context) error {
 					return nil
 				}
 
-				entry, err := parseFileIntoEntry(r.config.consulCommand, path, locale)
+				entry, err := parseFileIntoEntry(controlServer, r.config.consulCommand, path, locale)
 				if err != nil {
 					return err
 				}

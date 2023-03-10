@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"path"
 
+	"github.com/andrewstucki/consul-services/pkg/commands"
 	"github.com/andrewstucki/consul-services/pkg/server"
+	"github.com/andrewstucki/consul-services/pkg/vfs"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -111,19 +112,31 @@ func (c *ConsulMeshService) allocatePorts() error {
 func (c *ConsulMeshService) registerService(ctx context.Context) error {
 	c.Logger.Info("registering service", "id", c.ID)
 
-	return c.runConsulBinary(ctx, nil, c.serviceArgs())
+	return c.runConsulBinary(ctx, nil, commands.RegisterServiceArgs(
+		c.locality.Datacenter,
+		c.locality.getAddress(),
+		vfs.PathFor(c.serviceFile()),
+	))
 }
 
 func (c *ConsulMeshService) registerServiceProxy(ctx context.Context) error {
 	c.Logger.Info("registering sidecar proxy", "id", c.ID)
 
-	return c.runConsulBinary(ctx, nil, c.serviceProxyArgs())
+	return c.runConsulBinary(ctx, nil, commands.RegisterServiceArgs(
+		c.locality.Datacenter,
+		c.locality.getAddress(),
+		vfs.PathFor(c.serviceProxyFile()),
+	))
 }
 
 func (c *ConsulMeshService) writeServiceDefaults(ctx context.Context) error {
 	c.Logger.Info("writing service defaults", "id", c.ID)
 
-	return c.runConsulBinary(ctx, nil, c.serviceDefaultsArgs())
+	return c.runConsulBinary(ctx, nil, commands.WriteConfigArgs(
+		c.locality.Datacenter,
+		c.locality.getAddress(),
+		vfs.PathFor(c.serviceDefaultsFile()),
+	))
 }
 
 func (c *ConsulMeshService) runService(ctx context.Context) error {
@@ -143,54 +156,27 @@ func (c *ConsulMeshService) runEnvoy(ctx context.Context) error {
 
 	return c.runConsulBinary(ctx, func(log string) {
 		c.Server.Register(server.Service{
-			Datacenter: c.locality.Datacenter,
-			Partition:  c.locality.Partition,
-			Namespace:  c.locality.Namespace,
-			Kind:       "connect-proxy",
-			Name:       c.ID + "-proxy",
-			AdminPort:  c.adminPort,
-			Ports:      append([]int{c.proxyPort}, c.tracker.ports...),
-			NamedPorts: c.tracker.namedPorts,
-			Logs:       log,
+			Datacenter:              c.locality.Datacenter,
+			Partition:               c.locality.Partition,
+			Namespace:               c.locality.Namespace,
+			Kind:                    "connect-proxy",
+			Name:                    c.ID + "-proxy",
+			AdminPort:               c.adminPort,
+			Ports:                   append([]int{c.proxyPort}, c.tracker.ports...),
+			NamedPorts:              c.tracker.namedPorts,
+			Logs:                    log,
+			ServiceDefaultsFile:     c.serviceDefaultsFile(),
+			ServiceProxyFile:        c.serviceProxyFile(),
+			ServiceRegistrationFile: c.serviceFile(),
+			ConsulAddress:           c.locality.getAddress(),
+			Protocol:                c.Protocol,
+			ServicePort:             c.servicePort,
 		})
-	}, c.sidecarArgs())
-}
-
-func (c *ConsulMeshService) serviceArgs() []string {
-	return []string{
-		"services", "register",
-		"-datacenter", c.locality.Datacenter,
-		"-http-addr", c.locality.getAddress(),
-		c.serviceFile(),
-	}
-}
-
-func (c *ConsulMeshService) serviceProxyArgs() []string {
-	return []string{
-		"services", "register",
-		"-datacenter", c.locality.Datacenter,
-		"-http-addr", c.locality.getAddress(),
-		c.serviceProxyFile(),
-	}
-}
-
-func (c *ConsulMeshService) serviceDefaultsArgs() []string {
-	return []string{
-		"config", "write",
-		"-datacenter", c.locality.Datacenter,
-		"-http-addr", c.locality.getAddress(),
-		c.serviceDefaultsFile(),
-	}
-}
-
-func (c *ConsulMeshService) sidecarArgs() []string {
-	return []string{
-		"connect", "envoy",
-		"-http-addr", c.locality.getAddress(),
-		"-sidecar-for", c.ID,
-		"-admin-bind", fmt.Sprintf("127.0.0.1:%d", c.adminPort),
-		"--", "-l", "trace",
-	}
+	}, commands.SidecarArgs(
+		c.locality.getAddress(),
+		c.ID,
+		c.adminPort,
+	))
 }
 
 func (c *ConsulMeshService) renderService() error {
@@ -210,19 +196,19 @@ func (c *ConsulMeshService) renderTemplate(template, name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(name, rendered, 0600)
+	return vfs.WriteFile(name, rendered, 0600)
 }
 
 func (c *ConsulMeshService) serviceFile() string {
-	return path.Join(c.Folder, fmt.Sprintf("service-%s.hcl", c.ID))
+	return path.Join(c.locality.Datacenter, fmt.Sprintf("service-%s.hcl", c.ID))
 }
 
 func (c *ConsulMeshService) serviceDefaultsFile() string {
-	return path.Join(c.Folder, fmt.Sprintf("service-defaults-%s.hcl", c.ID))
+	return path.Join(c.locality.Datacenter, fmt.Sprintf("service-defaults-%s.hcl", c.ID))
 }
 
 func (c *ConsulMeshService) serviceProxyFile() string {
-	return path.Join(c.Folder, fmt.Sprintf("service-proxy-%s.hcl", c.ID))
+	return path.Join(c.locality.Datacenter, fmt.Sprintf("service-proxy-%s.hcl", c.ID))
 }
 
 func (c *ConsulMeshService) executeTemplate(name string) ([]byte, error) {

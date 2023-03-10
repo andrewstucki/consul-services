@@ -2,27 +2,23 @@ package pkg
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/andrewstucki/consul-services/pkg/commands"
 	"github.com/andrewstucki/consul-services/pkg/server"
 	"github.com/hashicorp/consul/api"
 )
 
-var knownGateways = map[string]struct{}{
-	api.APIGateway:                     {},
-	api.IngressGateway:                 {},
-	api.TerminatingGateway:             {},
-	string(api.ServiceKindMeshGateway): {},
+var knownGateways = map[string]string{
+	api.APIGateway:                     "api",
+	api.IngressGateway:                 "ingress",
+	api.TerminatingGateway:             "terminating",
+	string(api.ServiceKindMeshGateway): "mesh",
 }
 
 // ConsulGateway is a gateway service to run on the Consul service mesh using the `consul connect envoy` command.
 type ConsulGateway struct {
 	*ConsulConfigEntry
 
-	// Name is the name of the gateway to run
-	Name string
-	// Kind is the kind of gateway to run
-	Kind string
 	// DefinitionFile is the path to the file used for registering the gateway
 	DefinitionFile string
 	// Server is used for service registration
@@ -45,13 +41,17 @@ func (c *ConsulGateway) Run(ctx context.Context) error {
 	return c.runEnvoy(ctx)
 }
 
+func (c *ConsulGateway) gatewayKind() string {
+	return knownGateways[c.Kind]
+}
+
 func (c *ConsulGateway) allocatePorts() error {
 	adminPort, err := freePort()
 	if err != nil {
 		return err
 	}
 
-	if c.Kind != "api" {
+	if c.gatewayKind() != "api" {
 		// we allocate an additional port here and grab
 		// it as the first allocation in our registration so that
 		// we can run all the gateways on different ports
@@ -69,33 +69,24 @@ func (c *ConsulGateway) allocatePorts() error {
 func (c *ConsulGateway) runEnvoy(ctx context.Context) error {
 	c.Logger.Info("running gateway", "admin", c.adminPort, "ports", c.tracker.ports)
 
+	registrationPort := 8443
+	if len(c.tracker.ports) > 0 {
+		registrationPort = c.tracker.ports[0]
+	}
+
 	return c.runConsulBinary(ctx, func(log string) {
 		c.Server.Register(server.Service{
-			Kind:       c.Kind,
-			Name:       c.Name,
-			AdminPort:  c.adminPort,
-			Ports:      c.tracker.ports,
-			NamedPorts: c.tracker.namedPorts,
-			Logs:       log,
+			Datacenter:     c.locality.Datacenter,
+			Partition:      c.locality.Partition,
+			Namespace:      c.locality.Namespace,
+			Kind:           c.Kind,
+			Name:           c.Name,
+			AdminPort:      c.adminPort,
+			Ports:          c.tracker.ports,
+			NamedPorts:     c.tracker.namedPorts,
+			Logs:           log,
+			ConsulAddress:  c.locality.getAddress(),
+			RegisteredPort: registrationPort,
 		})
-	}, c.gatewayArgs())
-}
-
-func (c *ConsulGateway) gatewayArgs() []string {
-	args := []string{
-		"connect", "envoy",
-		"-gateway", c.Kind,
-		"-register",
-		"-service", c.Name,
-		"-proxy-id", c.Name,
-		"-admin-bind", fmt.Sprintf("127.0.0.1:%d", c.adminPort),
-		"-http-addr", c.locality.getAddress(),
-	}
-
-	if len(c.tracker.ports) > 0 {
-		args = append(args, "-address", fmt.Sprintf("127.0.0.1:%d", c.tracker.ports[0]))
-	}
-	args = append(args, "--", "-l", "trace")
-
-	return args
+	}, commands.GatewayRegistrationArgs(c.gatewayKind(), c.Name, c.locality.getAddress(), c.adminPort, registrationPort))
 }

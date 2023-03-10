@@ -11,6 +11,8 @@ import (
 	"sync"
 
 	"github.com/gorilla/mux"
+	"github.com/hashicorp/consul/api"
+	"github.com/hashicorp/go-hclog"
 )
 
 // Server is a control server for all the services running.
@@ -18,10 +20,18 @@ type Server struct {
 	// SocketPath is the path to the control socket.
 	SocketPath string
 
+	// Logger for errors
+	Logger hclog.Logger
+
+	// Datacenters are the names of the datacenters this server tracks resources for.
+	Datacenters []string
+
 	// consuls contains the registered consul instances
 	consuls []Consul
 	// services contains the registered services
 	services []Service
+	// entries contains the registered user-provided config entries
+	entries []Entry
 	// mutex guards the service registration
 	mutex sync.RWMutex
 	// server is a handle to the http server
@@ -29,9 +39,11 @@ type Server struct {
 }
 
 // New creates a new control server.
-func New(path string) *Server {
+func New(logger hclog.Logger, path string, datacenters []string) *Server {
 	return &Server{
-		SocketPath: path,
+		SocketPath:  path,
+		Logger:      logger,
+		Datacenters: datacenters,
 	}
 }
 
@@ -42,6 +54,7 @@ func (s *Server) Run(ctx context.Context) error {
 	router.HandleFunc("/services", s.listServices)
 	router.HandleFunc("/services/{kind}/{name}", s.getService)
 	router.HandleFunc("/consul/{dc}", s.getConsul)
+	router.HandleFunc("/report", s.getReport)
 
 	s.server = &http.Server{
 		Handler: router,
@@ -85,6 +98,14 @@ func (s *Server) AddConsul(consul Consul) {
 	defer s.mutex.Unlock()
 
 	s.consuls = append(s.consuls, consul)
+}
+
+// AddEntry adds the entry instance to the control server.
+func (s *Server) AddEntry(entry Entry) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.entries = append(s.entries, entry)
 }
 
 func (s *Server) shutdown(w http.ResponseWriter, r *http.Request) {
@@ -166,4 +187,102 @@ func (s *Server) getConsul(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprintf(w, "not found")
+}
+
+func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {
+	snapshot := s.snapshot()
+	operations, err := snapshot.Operations()
+
+	if err != nil {
+		s.Logger.Error("snapshot generation error", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "internal error")
+		return
+	}
+
+	var builder strings.Builder
+
+	_, err = builder.WriteString(scriptHead)
+	if err != nil {
+		s.Logger.Error("script building error", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "internal error")
+		return
+	}
+	for _, op := range operations {
+		script := op.Script()
+		if _, ok := op.(Block); !ok {
+			script = "\n" + strings.TrimSpace(script) + "\n"
+		}
+
+		_, err := builder.WriteString(script)
+		if err != nil {
+			s.Logger.Error("script building error", "err", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, "internal error")
+			return
+		}
+	}
+	_, err = builder.WriteString(scriptTail)
+	if err != nil {
+		s.Logger.Error("script building error", "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, "internal error")
+		return
+	}
+
+	fmt.Fprintf(w, builder.String())
+}
+
+var knownGateways = map[string]string{
+	api.APIGateway:         "api",
+	api.IngressGateway:     "ingress",
+	api.TerminatingGateway: "terminating",
+}
+
+func (s *Server) snapshot() Snapshot {
+	var snapshot Snapshot
+
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	for _, dc := range s.Datacenters {
+		datacenter := DatacenterSnapshot{
+			Datacenter: dc,
+		}
+		for i := range s.consuls {
+			consul := s.consuls[i]
+			if consul.Datacenter == dc {
+				datacenter.Consul = &consul
+				break
+			}
+		}
+		for _, service := range s.services {
+			if service.Datacenter == dc {
+				switch {
+				case service.Kind == "service":
+					datacenter.Services = append(datacenter.Services, service)
+				case service.Kind == "external":
+					datacenter.ExternalServices = append(datacenter.ExternalServices, service)
+				case service.Kind == "mesh":
+					// special case the mesh gateways since they need to be booted up early
+					datacenter.MeshGateways = append(datacenter.MeshGateways, service)
+				case knownGateways[service.Kind] != "":
+					datacenter.Gateways = append(datacenter.Gateways, service)
+				default:
+					datacenter.ServiceProxies = append(datacenter.ServiceProxies, service)
+				}
+			}
+		}
+		for _, entry := range s.entries {
+			if entry.Datacenter == dc {
+				datacenter.ConfigEntries = append(datacenter.ConfigEntries, entry)
+			}
+		}
+		snapshot.Datacenters = append(snapshot.Datacenters, datacenter)
+	}
+
+	snapshot.logger = s.Logger
+
+	return snapshot
 }

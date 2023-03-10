@@ -6,14 +6,27 @@ import (
 	"os"
 	"path"
 	"text/template"
+
+	"github.com/andrewstucki/consul-services/pkg/commands"
+	"github.com/andrewstucki/consul-services/pkg/server"
+	"github.com/andrewstucki/consul-services/pkg/vfs"
 )
 
 // ConsulConfigEntry is a config entry to write to Consul
 type ConsulConfigEntry struct {
 	*ConsulCommand
 
+	// Kind string is the kind in the file definition
+	Kind string
+
+	// Name is the name in the file definition
+	Name string
+
 	// DefinitionFile is the path to the file used for writing the config entry
 	DefinitionFile string
+
+	// Server is the server to register the config entry with
+	Server *server.Server
 
 	// tracker holds the allocated information for the entry
 	tracker *tracker
@@ -22,7 +35,7 @@ type ConsulConfigEntry struct {
 }
 
 func (c *ConsulConfigEntry) renderedFile() string {
-	return path.Join(c.Folder, path.Base(c.DefinitionFile))
+	return path.Join(c.locality.Datacenter, "entries", path.Base(c.DefinitionFile))
 }
 
 func (c *ConsulConfigEntry) Write(ctx context.Context) error {
@@ -32,12 +45,21 @@ func (c *ConsulConfigEntry) Write(ctx context.Context) error {
 		return err
 	}
 
-	return c.runConsulBinary(ctx, nil, []string{
-		"config", "write",
-		"-datacenter", c.locality.Datacenter,
-		"-http-addr", c.locality.getAddress(),
-		c.renderedFile(),
-	})
+	return c.runConsulBinary(ctx, func(log string) {
+		c.Server.AddEntry(server.Entry{
+			Datacenter:    c.locality.Datacenter,
+			Partition:     c.locality.Partition,
+			Namespace:     c.locality.Namespace,
+			Kind:          c.Kind,
+			Name:          c.Name,
+			File:          c.renderedFile(),
+			ConsulAddress: c.locality.getAddress(),
+		})
+	}, commands.WriteConfigArgs(
+		c.locality.Datacenter,
+		c.locality.getAddress(),
+		vfs.PathFor(c.renderedFile()),
+	))
 }
 
 func (c *ConsulConfigEntry) renderTemplate(template, name string) error {
@@ -45,7 +67,7 @@ func (c *ConsulConfigEntry) renderTemplate(template, name string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(name, rendered, 0600)
+	return vfs.WriteFile(name, rendered, 0600)
 }
 
 func (c *ConsulConfigEntry) executeTemplate(name string) ([]byte, error) {

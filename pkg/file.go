@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"os"
-	"strings"
 	"text/template"
 
+	"github.com/andrewstucki/consul-services/pkg/server"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -89,7 +89,7 @@ func parseFile(path string) (*file, error) {
 	return parsed, nil
 }
 
-func parseFileIntoEntry(command *ConsulCommand, definition string, locality locality) (interface{}, error) {
+func parseFileIntoEntry(server *server.Server, command *ConsulCommand, definition string, locality locality) (interface{}, error) {
 	file, err := parseFile(definition)
 	if err != nil {
 		return nil, err
@@ -97,7 +97,10 @@ func parseFileIntoEntry(command *ConsulCommand, definition string, locality loca
 
 	entry := &ConsulConfigEntry{
 		ConsulCommand:  command,
+		Kind:           file.Kind,
+		Name:           file.Name,
 		DefinitionFile: definition,
+		Server:         server,
 		tracker:        newTracker(),
 		locality:       locality,
 	}
@@ -105,8 +108,6 @@ func parseFileIntoEntry(command *ConsulCommand, definition string, locality loca
 	if _, ok := knownGateways[file.Kind]; ok {
 		return &ConsulGateway{
 			ConsulConfigEntry: entry,
-			Kind:              strings.TrimSuffix(file.Kind, "-gateway"),
-			Name:              file.Name,
 			DefinitionFile:    definition,
 		}, nil
 	}

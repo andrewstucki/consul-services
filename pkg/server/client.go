@@ -114,6 +114,30 @@ func (c *Client) GetConsul(dc string) (*Consul, error) {
 	return consul, nil
 }
 
+// GetReport returns a formatted script for reports.
+func (c *Client) GetReport() (string, error) {
+	url, err := url.Parse(requestPath("/report"))
+	if err != nil {
+		return "", err
+	}
+
+	response, err := c.client.Get(url.String())
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+	if response.StatusCode != 200 {
+		return "", fmt.Errorf("code: %d, message: %q", response.StatusCode, string(body))
+	}
+
+	return string(body), nil
+}
+
 // List lists the controlled services.
 func (c *Client) List(kinds ...string) ([]Service, error) {
 	url, err := url.Parse(requestPath("/services"))
