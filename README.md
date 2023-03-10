@@ -13,14 +13,14 @@ consul-services -c example/multi-dc.yaml -d
 Test the API gateway:
 
 ```bash
-GATEWAY_HTTP_PORT=$(consul-services get api -k api -f '.NamedPorts.one')
+GATEWAY_HTTP_PORT=$(consul-services get api -k api-gateway -f '.NamedPorts.one')
 curl localhost:$GATEWAY_HTTP_PORT -H "host: test.consul.local"
 ```
 
 Test the ingress gateway:
 
 ```bash
-INGRESS_HTTP_PORT=$(consul-services get ingress -k ingress -f '.Ports[1]')
+INGRESS_HTTP_PORT=$(consul-services get ingress -k ingress-gateway -f '.Ports[1]')
 curl localhost:$INGRESS_HTTP_PORT
 # and cross-dc mesh routing
 curl localhost:$INGRESS_HTTP_PORT -H "host: dc2.consul.internal"
@@ -35,13 +35,13 @@ consul-services check http-dc1-1-1 http-external-1
 Open up the admin interface of the API gateway:
 
 ```bash
-consul-services admin api -k api
+consul-services admin api -k api-gateway
 ```
 
 Check the logs of the API gateway:
 
 ```bash
-consul-services logs api -k api
+consul-services logs api -k api-gateway
 ```
 
 List all services:
@@ -56,6 +56,12 @@ Open up the Consul UI:
 consul-services ui
 # and for the second datacenter
 consul-services ui -d dc2
+```
+
+Generate a bash script that duplicates this environment
+
+```bash
+consul-services report
 ```
 
 Stop the services
@@ -82,6 +88,7 @@ Available Commands:
   help        Help about any command
   list        Lists the services currently running.
   logs        Read logs from a deployed service.
+  report      Generates a shell script for a Github report
   stop        Stops a daemonized run
   ui          Opens up the Consul UI
 
