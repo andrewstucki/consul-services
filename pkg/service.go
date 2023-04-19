@@ -44,6 +44,8 @@ func (s *Service) runTCPService(ctx context.Context) error {
 		}
 	}()
 
+	<-ctx.Done()
+
 	return nil
 }
 
